@@ -1,0 +1,4 @@
+2:1 KW_INT "int"
+2:5 IDENTIFIER "x"
+2:6 SEMICOLON ";"
+2:7 EOF ""
