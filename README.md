@@ -29,6 +29,7 @@
 
 
 ## Структура проекта
+```
 compiler-project/
 ├── src/
 │ ├── lexer/
@@ -52,7 +53,7 @@ compiler-project/
 │ └── language_spec.md # Формальная спецификация языка
 ├── pyproject.toml # Конфигурация проекта и entry points
 └── README.md
-
+```
 
 ## Установка и сборка
 
