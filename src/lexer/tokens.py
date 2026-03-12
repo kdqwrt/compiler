@@ -14,8 +14,12 @@ class TokenType(Enum):
     KW_VOID = auto()
     KW_STRUCT = auto()
     KW_FN = auto()
+    KW_STRING = auto()
 
+    INCREMENT = auto()
+    DECREMENT = auto()
 
+    NULL_LITERAL = auto()
 
     IDENTIFIER = auto()
     BOOL_LITERAL = auto()
@@ -57,6 +61,8 @@ class TokenType(Enum):
     COMMA = auto()
     SEMICOLON = auto()
     COLON = auto()
+    ARROW = auto()
+    DOT = auto()
 
 
     EOF = auto()

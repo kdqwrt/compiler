@@ -10,6 +10,7 @@ class Scanner:
         'int': TokenType.KW_INT,
         'float': TokenType.KW_FLOAT,
         'bool': TokenType.KW_BOOL,
+        'string': TokenType.KW_STRING,
         'return': TokenType.KW_RETURN,
         'void': TokenType.KW_VOID,
         'struct': TokenType.KW_STRUCT,
@@ -115,14 +116,22 @@ class Scanner:
             case ':':
                 self.add_token(TokenType.COLON)
 
+            case '.':
+                self.add_token(TokenType.DOT)
             case '+':
-                self.add_token(TokenType.PLUS_ASSIGN if self.match('=') else TokenType.PLUS)
-
+                if self.match('+'):
+                    self.add_token(TokenType.INCREMENT)
+                elif self.match('='):
+                    self.add_token(TokenType.PLUS_ASSIGN)
+                else:
+                    self.add_token(TokenType.PLUS)
             case '-':
-                if self.match('='):
+                if self.match('>'):
+                    self.add_token(TokenType.ARROW)
+                elif self.match('-'):
+                    self.add_token(TokenType.DECREMENT)
+                elif self.match('='):
                     self.add_token(TokenType.MINUS_ASSIGN)
-                elif self.peek().isdigit():
-                    self.number()
                 else:
                     self.add_token(TokenType.MINUS)
 
@@ -271,36 +280,93 @@ class Scanner:
 
     def number(self):
         start_pos = self.start
-        while self.peek().isdigit():
-            self.advance()
+        start_line = self.token_start_line
+        start_column = self.token_start_column
 
-        match (self.peek(), self.peek_next().isdigit()):
-            case ('.', True):
+        # Собираем все символы, которые могут быть частью числа (цифры и точки)
+        dot_count = 0
+        while True:
+            if self.peek().isdigit():
                 self.advance()
-                while self.peek().isdigit():
-                    self.advance()
-                num_str = self.source[start_pos:self.current]
-                try:
-                    value = float(num_str)
-                    if abs(value) > 1e308:
-                        self.error(f"Число с плавающей точкой вне допустимого диапазона: {num_str}")
-                    self.add_token(TokenType.FLOAT_LITERAL, value)
-                except ValueError:
-                    self.error(f"Некорректное число с плавающей точкой: {num_str}")
-                    self.add_token(TokenType.FLOAT_LITERAL, 0.0)
+            elif self.peek() == '.':
+                dot_count += 1
+                self.advance()
+            else:
+                break
 
-            case _:
-                num_str = self.source[start_pos:self.current]
-                try:
-                    value = int(num_str)
-                    INT_MIN = -2**31
-                    INT_MAX = 2**31 - 1
-                    if value < INT_MIN or value > INT_MAX:
-                        self.error(f"Целое число вне диапазона 32-бит: {value} (допустимо {INT_MIN}..{INT_MAX})")
+        num_str = self.source[start_pos:self.current]
+
+        # Проверка на мальформированные числа
+        if dot_count > 1:
+            self.error(f"Мальформированное число: множественные десятичные точки: '{num_str}'")
+            # Пытаемся восстановить - убираем лишние точки
+            clean_str = ''
+            seen_dot = False
+            for ch in num_str:
+                if ch == '.':
+                    if not seen_dot:
+                        clean_str += ch
+                        seen_dot = True
+                    # else пропускаем лишние точки
+                else:
+                    clean_str += ch
+
+            try:
+                if '.' in clean_str:
+                    value = float(clean_str)
+                    self.add_token(TokenType.FLOAT_LITERAL, value)
+                else:
+                    value = int(clean_str)
                     self.add_token(TokenType.INT_LITERAL, value)
-                except ValueError:
-                    self.error(f"Некорректное целое число: {num_str}")
-                    self.add_token(TokenType.INT_LITERAL, 0)
+            except ValueError:
+                self.add_token(TokenType.INT_LITERAL, 0)
+            return
+
+        # Число заканчивается точкой (например "1.")
+        if num_str.endswith('.'):
+            self.error(f"Мальформированное число: десятичная точка в конце: '{num_str}'")
+            try:
+                # Пробуем интерпретировать как целое без точки
+                value = int(num_str[:-1])
+                self.add_token(TokenType.INT_LITERAL, value)
+            except ValueError:
+                self.add_token(TokenType.INT_LITERAL, 0)
+            return
+
+        # Число начинается с точки (например ".5")
+        if num_str.startswith('.') and len(num_str) > 1:
+            self.error(f"Мальформированное число: десятичная точка в начале: '{num_str}'")
+            try:
+                # Добавляем 0 перед точкой
+                value = float('0' + num_str)
+                self.add_token(TokenType.FLOAT_LITERAL, value)
+            except ValueError:
+                self.add_token(TokenType.FLOAT_LITERAL, 0.0)
+            return
+
+        # Пустое число (только точка)
+        if num_str == '.':
+            self.error(f"Мальформированное число: только десятичная точка")
+            self.add_token(TokenType.DOT)  # Обрабатываем как обычную точку
+            return
+
+        # Валидное число
+        try:
+            if '.' in num_str:
+                value = float(num_str)
+                if abs(value) > 1e308:
+                    self.error(f"Число с плавающей точкой вне допустимого диапазона: {num_str}")
+                self.add_token(TokenType.FLOAT_LITERAL, value)
+            else:
+                value = int(num_str)
+                INT_MIN = -2 ** 31
+                INT_MAX = 2 ** 31 - 1
+                if value < INT_MIN or value > INT_MAX:
+                    self.error(f"Целое число вне диапазона 32-бит: {value} (допустимо {INT_MIN}..{INT_MAX})")
+                self.add_token(TokenType.INT_LITERAL, value)
+        except ValueError:
+            self.error(f"Некорректное число: {num_str}")
+            self.add_token(TokenType.INT_LITERAL, 0)
 
     def identifier(self):
         while self.peek().isalnum() or self.peek() == '_':
@@ -319,6 +385,8 @@ class Scanner:
                 self.add_token(TokenType.BOOL_LITERAL, True)
             case 'false':
                 self.add_token(TokenType.BOOL_LITERAL, False)
+            case 'null':
+                self.add_token(TokenType.NULL_LITERAL, None)
             case _:
                 token_type = self.KEYWORDS.get(lexeme, TokenType.IDENTIFIER)
                 self.add_token(token_type)

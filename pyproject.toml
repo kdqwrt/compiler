@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "compiler"
-version = "0.1.0"
+version = "0.2.0"
 description = "MiniCompiler для C-подобного языка"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 license = {text = "MIT"}
 
 [project.scripts]
@@ -31,3 +31,8 @@ include = ["src*"]
 [tool.black]
 line-length = 88
 target-version = ['py38']
+
+[tool.pytest.ini_options]
+markers = [
+    "performance: Performance tests"
+]

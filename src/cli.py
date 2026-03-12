@@ -5,10 +5,12 @@ from pathlib import Path
 from src.lexer.scanner import Scanner
 from src.preprocessor.preprocessor import Preprocessor
 from src.preprocessor.macros import MacroProcessor
+from src.parser.parser import Parser
+from src.parser.ast import generate_dot, pretty_print, ast_to_json
 
-
-VERSION = "0.1.0"
+VERSION = "0.2.0"  # Обновляем версию для Спринта 2
 SPEC_PATH = Path("docs/language_spec.md")
+
 
 def read_file(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
@@ -23,17 +25,13 @@ def print_errors(errors):
     return False
 
 
-
 def run_preprocess(args):
     source = read_file(args.input)
-
 
     pp = Preprocessor(source)
     cleaned = pp.process()
 
-
     mp = MacroProcessor()
-
 
     if args.defines:
         for define in args.defines:
@@ -86,11 +84,60 @@ def run_lex(args):
         print_errors(errors)
 
 
+def run_parse(args):
+    source = read_file(args.input)
+
+    # Лексический анализ
+    scanner = Scanner(source)
+    tokens = scanner.scan_tokens()
+
+    lex_errors = scanner.get_errors()
+    if lex_errors:
+        print_errors(lex_errors)
+        if args.fail_fast:
+            sys.exit(1)
+
+    # Синтаксический анализ
+    parser = Parser(tokens)
+    ast = parser.parse()
+
+    parse_errors = parser.get_errors()
+    if parse_errors:
+        print_errors(parse_errors)
+        if args.fail_fast:
+            sys.exit(1)
+
+    # Вывод AST в требуемом формате
+    output = None
+    if args.format == "text":
+        # Используем Visitor для pretty printing
+        from src.parser.visitor import ASTPrettyPrinter
+        printer = ASTPrettyPrinter()
+        printer.visit(ast)
+        output = printer.get_result()
+    elif args.format == "dot":
+        output = generate_dot(ast)
+    elif args.format == "json":
+        output = ast_to_json(ast)
+
+    if args.output:
+        Path(args.output).write_text(output, encoding="utf-8")
+        if args.verbose:
+            print(f"AST saved to {args.output}", file=sys.stderr)
+    else:
+        print(output)
+
+    # Статистика в verbose режиме
+    if args.verbose:
+        print(f"\nStatistics:", file=sys.stderr)
+        print(f"  Tokens: {len(tokens)}", file=sys.stderr)
+        print(f"  Lexical errors: {len(lex_errors)}", file=sys.stderr)
+        print(f"  Parse errors: {len(parse_errors)}", file=sys.stderr)
+        print(f"  AST nodes: {ast.count_nodes() if hasattr(ast, 'count_nodes') else 'N/A'}", file=sys.stderr)
 
 
 def run_full(args):
     source = read_file(args.input)
-
 
     pp = Preprocessor(source)
     cleaned = pp.process()
@@ -114,7 +161,6 @@ def run_full(args):
         print_errors(pp_errors + mp_errors)
         sys.exit(1)
 
-
     scanner = Scanner(processed)
     tokens = []
 
@@ -129,7 +175,6 @@ def run_full(args):
     print("\n".join(tokens))
     if print_errors(errors):
         sys.exit(1)
-
 
 
 def run_check(args):
@@ -147,23 +192,22 @@ def run_check(args):
     print("No lexical errors detected.")
 
 
-
 def run_info():
     print("MiniCompiler")
     print(f"Version: {VERSION}")
     print("Language: Simplified C-like")
-    print("Sprint: 1 (Lexer + Preprocessor)")
+    print("Sprint: 2 (Lexer + Parser + AST)")
 
 
 def run_spec():
-    if SPEC_PATH.exists():
-        print(SPEC_PATH.read_text(encoding="utf-8"))
-    else:
-        print("Specification not found.")
+    if not SPEC_PATH.exists():
+        print("Specification not found.", file=sys.stderr)
+        sys.exit(1)
 
+    content = SPEC_PATH.read_text(encoding="utf-8")
 
-
-
+    # пишем байты напрямую, без cp1251 кодирования
+    sys.stdout.buffer.write(content.encode("utf-8"))
 def main():
     parser = argparse.ArgumentParser(prog="compiler")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -183,6 +227,28 @@ def main():
     lex.add_argument("--quiet", action="store_true")
     lex.add_argument("--fail-fast", action="store_true")
     lex.set_defaults(func=run_lex)
+
+    # parse (новая команда)
+    parse = sub.add_parser("parse", help="Parse source file and output AST")
+    parse.add_argument("--input", required=True)
+
+    parse.add_argument(
+        "--output", "--output-file",
+        dest="output",
+        help="Output file (default: stdout)"
+    )
+
+    parse.add_argument(
+        "--format", "--ast-format",
+        dest="format",
+        choices=["text", "dot", "json"],
+        default="text",
+        help="AST output format"
+    )
+
+    parse.add_argument("--verbose", action="store_true", help="Show parsing statistics")
+    parse.add_argument("--fail-fast", action="store_true", help="Stop on first error")
+    parse.set_defaults(func=run_parse)
 
     # full
     full = sub.add_parser("full")

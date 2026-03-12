@@ -1,77 +1,120 @@
 # MiniCompiler
 
+MiniCompiler — учебный компилятор для упрощённого C-подобного языка.  
+На текущем этапе реализованы:
+
+- препроцессинг
+- лексический анализ
+- синтаксический анализ
+- построение AST
+- вывод AST в форматах text, DOT и JSON
+- набор модульных и golden-тестов
+
+---
 
 ## Содержание
+
 - [Реализованные возможности](#реализованные-возможности)
 - [Технические характеристики](#технические-характеристики)
 - [Структура проекта](#структура-проекта)
-- [Установка и сборка](#установка-и-сборка)
+- [Установка](#установка)
 - [Быстрый старт](#быстрый-старт)
-- [Использование CLI](#использование-cli)
-  - [Лексический анализ](#лексический-анализ)
-  - [Препроцессор](#препроцессор)
-  - [Полный пайплайн](#полный-пайплайн)
-  - [Дополнительные команды](#дополнительные-команды)
+- [CLI](#cli)
+- [Команда parse](#команда-parse)
+- [Формальная грамматика](#формальная-грамматика)
+- [AST](#ast)
 - [Тестирование](#тестирование)
-  - [Статистика тестов](#статистика-тестов)
-  - [Запуск тестов](#запуск-тестов)
-- [Спецификация языка](#спецификация-языка)
+- [Примеры](#примеры)
+
 
 ## Реализованные возможности
 
-**Лексический анализатор (Lexer)**
-- Распознавание всех ключевых слов языка (if, else, while, for, int, float, bool, return, true, false, void, struct, fn)
-- Идентификаторы с проверкой длины (до 255 символов)
-- Литералы: целые (32-бит), вещественные, строковые, булевы
-- Операторы
-- Разделители и обработка EOF
-- Отслеживание позиции (строка, колонка) с поддержкой Windows (\r\n) и Unix (\n) окончаний строк
-- Восстановление после ошибок с выводом диагностических сообщений
+### Препроцессор
+- удаление однострочных комментариев `// ...`
+- удаление многострочных комментариев `/* ... */`
+- поддержка директив `#define` и `#undef`
+- сохранение содержимого строковых литералов
 
-**Препроцессор (Preprocessor)**
-- Удаление однострочных (//) и многострочных (/* */) комментариев
-- Сохранение комментариев внутри строковых литералов
-- Обработка макросов: #define, #undef
+### Лексический анализатор
+- ключевые слова: `fn`, `struct`, `if`, `else`, `while`, `for`, `return`
+- базовые типы: `int`, `float`, `bool`, `string`, `void`
+- литералы: `int`, `float`, `string`, `bool`, `null`
+- идентификаторы
+- арифметические, логические, сравнительные и присваивающие операторы
+- операторы `++` и `--`
+- отслеживание позиции токена: строка и колонка
+- восстановление после части лексических ошибок
+
 
 ## Технические характеристики
 
-- **Язык реализации**: Python 3.8+
+- **Язык реализации**: Python 3.12+
 - **Интерфейс**: командная строка (CLI)
 - **Кодировка исходных файлов**: UTF-8
 - **Поддерживаемые платформы**: Windows, Linux
 - **Система сборки**: pyproject.toml
 
+### Парсер
+- recursive descent parser
+- построение AST из токенов
+- базовое восстановление после синтаксических ошибок
+- обработка:
+  - объявлений переменных
+  - объявлений функций
+  - объявлений структур
+  - блоков
+  - `if / else`
+  - `while`
+  - `for`
+  - `return`
+  - выражений
+  - вызовов функций
+  - доступа к полям структуры
+
+### AST
+- текстовый pretty-print
+- экспорт в Graphviz DOT
+- экспорт в JSON
+- visitor для обхода AST
 
 ## Структура проекта
+
+```text
 compiler-project/
 ├── src/
-│ ├── lexer/
-│ │ ├── init.py
-│ │ ├── scanner.py # Основная логика сканера
-│ │ └── tokens.py # Определения типов токенов
-│ ├── preprocessor/
-│ │ ├── init.py
-│ │ ├── macros.py # Обработка директив макросов
-│ │ └── preprocessor.py # Удаление комментариев
-│ └── utils/
-│ └── cli.py # Интерфейс командной строки
+│   ├── lexer/
+│   │   ├── scanner.py
+│   │   └── tokens.py
+│   ├── parser/
+│   │   ├── ast.py
+│   │   ├── grammar.txt
+│   │   ├── parser.py
+│   │   └── visitor.py
+│   ├── preprocessor/
+│   │   ├── macros.py
+│   │   └── preprocessor.py
+│   ├── utils/
+│   └── cli.py
 ├── tests/
-│ ├── lexer/
-│ │ ├── valid/ # Позитивные тесты (.src + .expected)
-│ │ └── invalid/ # Негативные тесты (.src + .expected)
-│ ├── test_p.py # Модульные тесты (pytest)
-│ └── test_runner.py # Интеграционный тест-раннер
-├── examples/ # Примеры исходного кода
+│   ├── lexer/
+│   ├── parser/
+│   │   └── golden/
+│   ├── test_cli.py
+│   ├── test_lexer.py
+│   ├── test_parser.py
+│   ├── test_p.py
+│   ├── test_performance.py
+│   └── test_runner.py
+├── examples/
 ├── docs/
-│ └── language_spec.md # Формальная спецификация языка
-├── pyproject.toml # Конфигурация проекта и entry points
+│   └── language_spec.md
+├── pyproject.toml
 └── README.md
-
-
+```
 ## Установка и сборка
 
 ### Требования
-- Python 3.8 или выше
+- Python 3.12 или выше
 - pip (менеджер пакетов Python)
 
 ### Установка проекта
@@ -97,13 +140,7 @@ fn main() {
     int x = 42;
     string msg = "Hello";
 }
-Запустите лексический анализ:
 ```
-```bash
-compiler lex --input examples/hello.src
-```
-
-
 ### Препроцессор
 ```bash
 # Обработка комментариев и макросов
@@ -115,10 +152,36 @@ compiler preprocess --input <файл>
 compiler preprocess --input <файл> --show
 ```
 
+### Лексический анализ
+```bash
+compiler lex --input examples/hello.src
+```
+
+### Построение AST в текстовом формате
+```bash
+compiler parse --input hello1.src --output ast.txt
+```
+
+### Построение AST в json
+```bash
+compiler parse --input hello1.src --format json --output ast.json
+```
+
+### Построение AST в dot
+```bash
+compiler parse --input hello1.src --format dot --output ast.dot
+```
+
+### Сохранение AST в .png
+```bash
+dot -Tpng ast.dot -o ast.png
+```
 
 ### Запуск тестов
 ```bash
 # Запуск модульных тестов (pytest)
+pytest tests\ -v
+
 pytest tests/test_p.py -v
 
 pytest tests/test_lexer.py -v
@@ -126,4 +189,77 @@ pytest tests/test_lexer.py -v
 pytest tests/test_cli.py -v
 # Запуск интеграционных тестов
 python tests/test_runner.py
+```
 
+## Формальная грамматика
+
+#### Формальная грамматика языка находится в:
+```text
+src/parser/grammar.txt
+```
+
+Грамматика записана в EBNF.
+Стартовый символ:
+```text
+Program ::= { TopLevelDecl } EOF
+```
+
+### Основные конструкции
+```text
+TopLevelDecl ::= FunctionDecl
+               | StructDecl
+               | VarDecl
+
+FunctionDecl ::= "fn" Identifier "(" [ Parameters ] ")" [ "->" Type ] Block
+StructDecl   ::= "struct" Identifier "{" { FieldDecl } "}"
+VarDecl      ::= Type Identifier [ "=" Expression ] ";"
+```
+### Операторы и приоритеты
+
+Приоритет операторов от большего к меньшему:
+
+- Primary expressions
+
+- Postfix expressions
+
+- Unary operators
+
+- Multiplicative
+
+- Additive
+
+- Relational
+
+- Equality
+
+- Logical AND
+
+- Logical OR
+
+- Assignment
+
+### Ассоциативность:
+
+- left-associative: `+ - * / % && ||`
+
+- right-associative: `= += -= *= /=`
+
+- non-associative: `== != < <= > >=`
+
+
+### шпаргалка
+```
+compiler preprocess --input hello.src --output hello1.src
+
+compiler lex --input hello1.src
+
+compiler parse --input hello1.src
+
+compiler parse --input hello1.src --output ast.txt
+
+compiler parse --input hello1.src --format json --output ast.json
+
+compiler parse --input hello1.src --format dot --output ast.dot
+
+dot -Tpng ast.dot -o ast.png
+```

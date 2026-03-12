@@ -1,0 +1,14 @@
+Program:
+  FunctionDecl: countdown -> int
+    Parameters:
+      []
+    Body:
+      Block:
+        VarDecl: int i = 10
+        WhileStmt
+          Condition:
+            (i > 0)
+          Body:
+            Block:
+              (i = (i - 1))
+        Return: i

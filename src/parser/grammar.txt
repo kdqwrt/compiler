@@ -1,0 +1,206 @@
+MiniCompiler Language Grammar
+Notation: EBNF
+Start symbol: Program
+
+==================================================
+1. Program
+==================================================
+
+Program ::= { TopLevelDecl } EOF
+
+TopLevelDecl ::= FunctionDecl
+               | StructDecl
+               | VarDecl
+
+
+==================================================
+2. Declarations
+==================================================
+
+FunctionDecl ::= "fn" Identifier "(" [ Parameters ] ")" [ "->" Type ] Block
+
+StructDecl ::= "struct" Identifier "{" { FieldDecl } "}"
+
+FieldDecl ::= Type Identifier ";"
+
+VarDecl ::= Type Identifier [ "=" Expression ] ";"
+
+Parameters ::= Parameter { "," Parameter }
+
+Parameter ::= Type Identifier
+
+
+==================================================
+3. Statements
+==================================================
+
+Statement ::= Block
+            | IfStmt
+            | WhileStmt
+            | ForStmt
+            | ReturnStmt
+            | VarDecl
+            | ExprStmt
+            | EmptyStmt
+
+Block ::= "{" { Statement } "}"
+
+IfStmt ::= "if" "(" Expression ")" Statement [ "else" Statement ]
+
+WhileStmt ::= "while" "(" Expression ")" Statement
+
+ForStmt ::= "for" "(" [ ForInit ] ";" [ Expression ] ";" [ Expression ] ")" Statement
+
+ForInit ::= VarDeclNoSemicolon
+          | Expression
+
+VarDeclNoSemicolon ::= Type Identifier [ "=" Expression ]
+
+ReturnStmt ::= "return" [ Expression ] ";"
+
+ExprStmt ::= Expression ";"
+
+EmptyStmt ::= ";"
+
+
+==================================================
+4. Expressions
+==================================================
+
+Expression ::= Assignment
+
+Assignment ::= LogicalOr [ AssignmentOp Assignment ]
+
+AssignmentOp ::= "="
+               | "+="
+               | "-="
+               | "*="
+               | "/="
+
+LogicalOr ::= LogicalAnd { "||" LogicalAnd }
+
+LogicalAnd ::= Equality { "&&" Equality }
+
+Equality ::= Relational [ EqualityOp Relational ]
+
+EqualityOp ::= "==" | "!="
+
+Relational ::= Additive [ RelOp Additive ]
+
+RelOp ::= "<" | "<=" | ">" | ">="
+
+Additive ::= Multiplicative { AddOp Multiplicative }
+
+AddOp ::= "+" | "-"
+
+Multiplicative ::= Unary { MulOp Unary }
+
+MulOp ::= "*" | "/" | "%"
+
+Unary ::= PrefixOp Unary
+        | Postfix
+
+PrefixOp ::= "-"
+           | "!"
+           | "++"
+           | "--"
+
+Postfix ::= Primary { PostfixSuffix } [ PostfixOp ]
+
+PostfixSuffix ::= CallSuffix
+                | FieldAccess
+
+CallSuffix ::= "(" [ Arguments ] ")"
+
+FieldAccess ::= "." Identifier
+
+PostfixOp ::= "++" | "--"
+
+Arguments ::= Expression { "," Expression }
+
+
+==================================================
+5. Primary Expressions
+==================================================
+
+Primary ::= Literal
+          | Identifier
+          | "(" Expression ")"
+
+
+==================================================
+6. Types
+==================================================
+
+Type ::= BasicType
+       | UserType
+
+BasicType ::= "int"
+            | "float"
+            | "bool"
+            | "string"
+            | "void"
+
+UserType ::= Identifier
+
+
+==================================================
+7. Literals
+==================================================
+
+Literal ::= Integer
+          | Float
+          | String
+          | Boolean
+          | "null"
+
+
+==================================================
+8. Operator Precedence
+==================================================
+
+Highest -> Lowest
+
+1. Primary expressions
+2. Postfix expressions
+3. Unary operators
+4. Multiplicative
+5. Additive
+6. Relational
+7. Equality
+8. Logical AND
+9. Logical OR
+10. Assignment
+
+
+==================================================
+9. Operator Associativity
+==================================================
+
+Left-associative:
+    +  -  *  /  %  &&  ||
+
+Right-associative:
+    =  +=  -=  *=  /=
+    prefix ++  prefix --
+
+Postfix:
+    postfix ++  postfix --
+
+Non-associative:
+    ==  !=  <  <=  >  >=
+
+
+==================================================
+10. Parsing Notes
+==================================================
+
+- Grammar is designed for recursive descent parsing.
+- Lookahead: 1 token for standard LL(1) prediction.
+- "else" binds to the nearest preceding "if".
+- User-defined types are written as identifiers:
+      Point p;
+  not:
+      struct Point p;
+- Structure declarations use:
+      struct Point { int x; int y; }

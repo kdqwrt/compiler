@@ -1,0 +1,17 @@
+Program:
+  FunctionDecl: test -> int
+    Parameters:
+      []
+    Body:
+      Block:
+        VarDecl: int x = 5
+        IfStmt
+          Condition:
+            (x > 0)
+          Then:
+            Block:
+              (x = (x - 1))
+          Else:
+            Block:
+              (x = (x + 1))
+        Return: x

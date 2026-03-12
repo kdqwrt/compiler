@@ -95,25 +95,31 @@ def test_scanner_identifier_with_underscore():
 
 
 def test_integer_literals():
-
     source = "0 42 -17 2147483647 -2147483648"
     scanner = Scanner(source)
     tokens = scanner.scan_tokens()
 
     ints = [t for t in tokens[:-1] if t.type.name == "INT_LITERAL"]
     assert len(ints) == 5
-    assert [i.literal_value for i in ints] == [0, 42, -17, 2147483647, -2147483648]
-    assert scanner.get_errors() == []
+    assert [i.literal_value for i in ints] == [0, 42, 17, 2147483647, 2147483648]
+
+    minus_tokens = [t for t in tokens[:-1] if t.type.name == "MINUS"]
+    assert len(minus_tokens) == 2
+
+    errors = scanner.get_errors()
+    assert len(errors) == 1
+    assert "2147483648" in errors[0]
+    assert "вне диапазона" in errors[0]
 
 
 def test_integer_out_of_range():
-
     source = "2147483648 -2147483649"
     scanner = Scanner(source)
     tokens = scanner.scan_tokens()
 
+    # 2147483648, MINUS, 2147483649, EOF
+    assert len(tokens) == 4
 
-    assert len(tokens) == 3
     errors = scanner.get_errors()
     assert len(errors) == 2
     assert "вне диапазона" in errors[0]
@@ -121,7 +127,6 @@ def test_integer_out_of_range():
 
 
 def test_float_literals():
-
     source = "0.0 3.14 -2.5 100.0 0.001"
     scanner = Scanner(source)
     tokens = scanner.scan_tokens()
@@ -130,21 +135,28 @@ def test_float_literals():
     assert len(floats) == 5
     assert floats[0].literal_value == 0.0
     assert floats[1].literal_value == 3.14
-    assert floats[2].literal_value == -2.5
+    assert floats[2].literal_value == 2.5
     assert floats[3].literal_value == 100.0
     assert floats[4].literal_value == 0.001
+
+    minus_tokens = [t for t in tokens[:-1] if t.type.name == "MINUS"]
+    assert len(minus_tokens) == 1
+
     assert scanner.get_errors() == []
 
 
 def test_float_malformed():
-
     source = "1.  .5 1..2"
     scanner = Scanner(source)
     tokens = scanner.scan_tokens()
 
-
     errors = scanner.get_errors()
-    assert len(errors) > 0
+    # Ожидаем ошибки для мальформированных чисел
+    assert len(errors) > 0, "Должны быть ошибки для мальформированных чисел"
+
+    # Опционально: проверим конкретные ошибки
+    error_messages = " ".join(errors).lower()
+    assert any(word in error_messages for word in ["число", "float", "литерал", "malformed", "invalid"])
 
 
 def test_string_literals():
