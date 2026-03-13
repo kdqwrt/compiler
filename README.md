@@ -72,12 +72,15 @@ MiniCompiler — учебный компилятор для упрощённог
 - экспорт в JSON
 - visitor для обхода AST
 
+
+
 ## Структура проекта
 
 ```text
 compiler-project/
 ├── src/
 │   ├── lexer/
+│   │   ├── __init__.py
 │   │   ├── scanner.py
 │   │   └── tokens.py
 │   ├── parser/
@@ -86,23 +89,21 @@ compiler-project/
 │   │   ├── parser.py
 │   │   └── visitor.py
 │   ├── preprocessor/
+│   │   ├── __init__.py
 │   │   ├── macros.py
-│   │   └── preprocessor.py
-│   ├── utils/
+│   │   ├── preprocessor.py
+│   │   └── test_p.py
 │   └── cli.py
 ├── tests/
-│   ├── lexer/
-│   ├── parser/
-│   │   └── golden/
 │   ├── test_cli.py
 │   ├── test_lexer.py
 │   ├── test_parser.py
-│   ├── test_p.py
 │   ├── test_performance.py
 │   └── test_runner.py
-├── examples/
 ├── docs/
+│   ├── grammar.md
 │   └── language_spec.md
+├── examples/
 ├── pyproject.toml
 └── README.md
 ```
