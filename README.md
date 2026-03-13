@@ -197,50 +197,27 @@ src/parser/grammar.txt
 Грамматика записана в EBNF.
 Стартовый символ:
 ```text
-Program ::= { TopLevelDecl } EOF
+Program         = { TopLevelDecl } EOF;
 ```
 
 ### Основные конструкции
 ```text
-TopLevelDecl ::= FunctionDecl
-               | StructDecl
-               | VarDecl
+TopLevelDecl    = FunctionDecl
+                | StructDecl
+                | VarDecl;
 
-FunctionDecl ::= "fn" Identifier "(" [ Parameters ] ")" [ "->" Type ] Block
-StructDecl   ::= "struct" Identifier "{" { FieldDecl } "}"
-VarDecl      ::= Type Identifier [ "=" Expression ] ";"
+FunctionDecl    = "fn" Identifier "(" [ Parameters ] ")" [ "->" Type ] Block;
+
+StructDecl      = "struct" Identifier "{" { FieldDecl } "}";
+
+FieldDecl       = Type Identifier ";";
+
+VarDecl         = Type Identifier [ "=" Expression ] ";";
+
+Parameters      = Parameter { "," Parameter };
+
+Parameter       = Type Identifier;
 ```
-### Операторы и приоритеты
-
-Приоритет операторов от большего к меньшему:
-
-- Primary expressions
-
-- Postfix expressions
-
-- Unary operators
-
-- Multiplicative
-
-- Additive
-
-- Relational
-
-- Equality
-
-- Logical AND
-
-- Logical OR
-
-- Assignment
-
-### Ассоциативность:
-
-- left-associative: `+ - * / % && ||`
-
-- right-associative: `= += -= *= /=`
-
-- non-associative: `== != < <= > >=`
 
 
 ### шпаргалка
