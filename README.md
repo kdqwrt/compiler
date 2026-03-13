@@ -187,37 +187,7 @@ pytest tests/test_cli.py -v
 python tests/test_runner.py
 ```
 
-## Формальная грамматика
 
-#### Формальная грамматика языка находится в:
-```text
-src/parser/grammar.txt
-```
-
-Грамматика записана в EBNF.
-Стартовый символ:
-```text
-Program         = { TopLevelDecl } EOF;
-```
-
-### Основные конструкции
-```text
-TopLevelDecl    = FunctionDecl
-                | StructDecl
-                | VarDecl;
-
-FunctionDecl    = "fn" Identifier "(" [ Parameters ] ")" [ "->" Type ] Block;
-
-StructDecl      = "struct" Identifier "{" { FieldDecl } "}";
-
-FieldDecl       = Type Identifier ";";
-
-VarDecl         = Type Identifier [ "=" Expression ] ";";
-
-Parameters      = Parameter { "," Parameter };
-
-Parameter       = Type Identifier;
-```
 
 
 ### шпаргалка
