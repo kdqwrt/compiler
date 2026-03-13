@@ -2,7 +2,7 @@ from src.parser.ast import *
 
 
 class ASTVisitor:
-    """Базовый класс Visitor для обхода AST"""
+
 
     def visit(self, node):
         if node is None:
@@ -12,7 +12,6 @@ class ASTVisitor:
         return visitor(node)
 
     def generic_visit(self, node):
-        """Общий метод обхода для узлов без специфического посетителя"""
         for attr_name in dir(node):
             if attr_name.startswith("_"):
                 continue
@@ -26,7 +25,7 @@ class ASTVisitor:
 
 
 class ASTPrettyPrinter(ASTVisitor):
-    """Visitor для pretty printing AST"""
+
 
     def __init__(self):
         self.indent = 0
@@ -38,9 +37,7 @@ class ASTPrettyPrinter(ASTVisitor):
     def get_result(self):
         return "\n".join(self.lines)
 
-    # ========================
-    # top-level
-    # ========================
+
 
     def visit_ProgramNode(self, node):
         self.print("Program:")
@@ -85,9 +82,6 @@ class ASTPrettyPrinter(ASTVisitor):
     def visit_ParamNode(self, node):
         self.print(f"{node.type.lexeme} {node.name.lexeme}")
 
-    # ========================
-    # statements
-    # ========================
 
     def visit_BlockStmtNode(self, node):
         self.print("Block:")
@@ -185,9 +179,7 @@ class ASTPrettyPrinter(ASTVisitor):
 
         self.indent -= 1
 
-    # ========================
-    # expressions
-    # ========================
+
 
     def _expr_to_str(self, expr):
         if expr is None:
@@ -227,7 +219,7 @@ class ASTPrettyPrinter(ASTVisitor):
 
 
 class ASTSemanticAnalyzer(ASTVisitor):
-    """Visitor для семантического анализа"""
+
 
     def __init__(self):
         self.errors = []

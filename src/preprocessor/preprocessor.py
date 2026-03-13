@@ -86,7 +86,6 @@ class Preprocessor:
 
 
             if in_block_comment:
-                # Заменяем символы пробелом, кроме переноса строки
                 if char == '\n':
                     result.append('\n')
                 else:

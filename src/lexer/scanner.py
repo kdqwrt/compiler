@@ -283,7 +283,7 @@ class Scanner:
         start_line = self.token_start_line
         start_column = self.token_start_column
 
-        # Собираем все символы, которые могут быть частью числа (цифры и точки)
+
         dot_count = 0
         while True:
             if self.peek().isdigit():
@@ -296,10 +296,8 @@ class Scanner:
 
         num_str = self.source[start_pos:self.current]
 
-        # Проверка на мальформированные числа
         if dot_count > 1:
             self.error(f"Мальформированное число: множественные десятичные точки: '{num_str}'")
-            # Пытаемся восстановить - убираем лишние точки
             clean_str = ''
             seen_dot = False
             for ch in num_str:
@@ -307,7 +305,6 @@ class Scanner:
                     if not seen_dot:
                         clean_str += ch
                         seen_dot = True
-                    # else пропускаем лишние точки
                 else:
                     clean_str += ch
 
@@ -344,10 +341,10 @@ class Scanner:
                 self.add_token(TokenType.FLOAT_LITERAL, 0.0)
             return
 
-        # Пустое число (только точка)
+
         if num_str == '.':
             self.error(f"Мальформированное число: только десятичная точка")
-            self.add_token(TokenType.DOT)  # Обрабатываем как обычную точку
+            self.add_token(TokenType.DOT)
             return
 
 

@@ -12,9 +12,7 @@ class Parser:
         self.current = 0
         self.errors = []
 
-    # ========================
-    # helpers
-    # ========================
+
 
     def peek(self):
         return self.tokens[self.current]
@@ -82,9 +80,7 @@ class Parser:
 
             self.advance()
 
-    # ========================
-    # entry
-    # ========================
+
 
     def parse(self):
         try:
@@ -128,9 +124,7 @@ class Parser:
 
 
 
-    # ========================
-    # declarations
-    # ========================
+
 
     def parseFunctionDecl(self):
         name = self.consume(TokenType.IDENTIFIER, "Expected function name")
@@ -219,9 +213,6 @@ class Parser:
 
         return ParamNode(type_token, name, type_token.line, type_token.column)
 
-    # ========================
-    # statements
-    # ========================
 
     def parseStatement(self):
         if self.match(TokenType.KW_IF):
@@ -396,9 +387,7 @@ class Parser:
 
         return ReturnStmtNode(value, semi.line, semi.column)
 
-    # ========================
-    # expressions
-    # ========================
+
 
     def parseExpression(self):
         return self.parseAssignment()
@@ -598,9 +587,7 @@ class Parser:
         self.error(self.peek(), "Expected expression")
         return None
 
-    # ========================
-    # types
-    # ========================
+
 
     def consumeType(self):
         if self.match(

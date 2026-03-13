@@ -14,7 +14,7 @@ class ASTNode:
 
     def to_dict(self):
         result = {
-            "type": self.__class__.__name__,  # Всегда имя класса
+            "type": self.__class__.__name__,
             "line": self.line,
             "column": self.column
         }
@@ -31,7 +31,6 @@ class ASTNode:
                     for item in value
                 ]
             elif hasattr(value, "lexeme"):
-                # Для токенов сохраняем в отдельном поле
                 result[f"{name}_token"] = value.lexeme
             else:
                 result[name] = value
@@ -203,7 +202,7 @@ class StructAccessExprNode(ExpressionNode):
         self.field = field
 
 
-# Вспомогательная функция для преобразования выражений в строку
+
 def expr_to_str(expr):
     if expr is None:
         return ""
@@ -222,12 +221,9 @@ def expr_to_str(expr):
         return f"({expr_to_str(expr.left)} {expr.operator.lexeme} {expr_to_str(expr.right)})"
 
     if isinstance(expr, UnaryExprNode):
-        # Проверяем, есть ли флаг is_postfix
         if hasattr(expr, 'is_postfix') and expr.is_postfix:
-            # Постфиксный оператор: операнд + оператор
             return f"({expr_to_str(expr.operand)}{expr.operator.lexeme})"
         else:
-            # Префиксный оператор: оператор + операнд
             return f"({expr.operator.lexeme}{expr_to_str(expr.operand)})"
 
     if isinstance(expr, AssignmentExprNode):
@@ -280,7 +276,6 @@ def pretty_print(node, indent=0):
     if isinstance(node, BlockStmtNode):
         result = f"{pad}Block:\n"
         for stmt in node.statements:
-            # Для ExprStmtNode выводим выражение без обертки ExprStmt
             if isinstance(stmt, ExprStmtNode):
                 result += f"{pad}  {expr_to_str(stmt.expression)}\n"
             else:
