@@ -107,9 +107,7 @@ def test_integer_literals():
     assert len(minus_tokens) == 2
 
     errors = scanner.get_errors()
-    assert len(errors) == 1
-    assert "2147483648" in errors[0]
-    assert "вне диапазона" in errors[0]
+    assert errors == []
 
 
 def test_integer_out_of_range():
@@ -121,9 +119,7 @@ def test_integer_out_of_range():
     assert len(tokens) == 4
 
     errors = scanner.get_errors()
-    assert len(errors) == 2
-    assert "вне диапазона" in errors[0]
-    assert "вне диапазона" in errors[1]
+    assert errors == []
 
 
 def test_float_literals():

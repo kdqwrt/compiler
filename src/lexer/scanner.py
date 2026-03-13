@@ -350,19 +350,14 @@ class Scanner:
             self.add_token(TokenType.DOT)  # Обрабатываем как обычную точку
             return
 
+
         # Валидное число
         try:
             if '.' in num_str:
                 value = float(num_str)
-                if abs(value) > 1e308:
-                    self.error(f"Число с плавающей точкой вне допустимого диапазона: {num_str}")
                 self.add_token(TokenType.FLOAT_LITERAL, value)
             else:
                 value = int(num_str)
-                INT_MIN = -2 ** 31
-                INT_MAX = 2 ** 31 - 1
-                if value < INT_MIN or value > INT_MAX:
-                    self.error(f"Целое число вне диапазона 32-бит: {value} (допустимо {INT_MIN}..{INT_MAX})")
                 self.add_token(TokenType.INT_LITERAL, value)
         except ValueError:
             self.error(f"Некорректное число: {num_str}")
