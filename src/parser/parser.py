@@ -1,4 +1,4 @@
-from src.lexer.tokens import TokenType
+from src.lexer.tokens import TokenType, Token
 from src.parser.ast import *
 
 
@@ -599,7 +599,7 @@ class Parser:
         ):
             return self.previous()
 
-        # Пользовательский тип: просто Identifier
+
         if self.match(TokenType.IDENTIFIER):
             return self.previous()
 
@@ -623,8 +623,34 @@ class Parser:
         ):
             return True
 
-        # Пользовательский тип: Identifier Identifier ...
+
         if self.check(TokenType.IDENTIFIER) and self.checkNext(TokenType.IDENTIFIER):
             return True
 
         return False
+
+    def consume(self, type_, message):
+        if self.check(type_):
+            return self.advance()
+
+        token = self.peek()
+        self.error(token, message)
+
+        # Вставляем недостающий токен
+        if type_ == TokenType.SEMICOLON:
+            print(f"[Восстановление ошибок] вставка пропущенного токена ';' на линии {token.line}, позиции {token.column}")
+            return self.make_synthetic_token(TokenType.SEMICOLON, ";")
+
+        if type_ == TokenType.RBRACE:
+            print(f"[Восстановление ошибок] вставка пропущенного токена '}}' на линии {token.line}, позиции {token.column}")
+            return self.make_synthetic_token(TokenType.RBRACE, "}")
+
+        if type_ == TokenType.RPAREN:
+            print(f"[Восстановление ошибок] вставка пропущенного токена ')' на линии {token.line}, позиции {token.column}")
+            return self.make_synthetic_token(TokenType.RPAREN, ")")
+
+        return None
+
+    def make_synthetic_token(self, token_type, lexeme=""):
+        current = self.peek()
+        return Token(token_type, lexeme, current.line, current.column)

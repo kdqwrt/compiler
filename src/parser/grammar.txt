@@ -1,206 +1,208 @@
-MiniCompiler Language Grammar
-Notation: EBNF
-Start symbol: Program
+// Грамматика языка MiniCompiler
 
-==================================================
-1. Program
-==================================================
+// Основные компоненты
+Program         = { TopLevelDecl } EOF;
 
-Program ::= { TopLevelDecl } EOF
+TopLevelDecl    = FunctionDecl
+                | StructDecl
+                | VarDecl;
 
-TopLevelDecl ::= FunctionDecl
-               | StructDecl
-               | VarDecl
 
+//  Объявления
+FunctionDecl    = "fn" Identifier "(" [ Parameters ] ")" [ "->" Type ] Block;
 
-==================================================
-2. Declarations
-==================================================
+StructDecl      = "struct" Identifier "{" { FieldDecl } "}";
 
-FunctionDecl ::= "fn" Identifier "(" [ Parameters ] ")" [ "->" Type ] Block
+FieldDecl       = Type Identifier ";";
 
-StructDecl ::= "struct" Identifier "{" { FieldDecl } "}"
+VarDecl         = Type Identifier [ "=" Expression ] ";";
 
-FieldDecl ::= Type Identifier ";"
+Parameters      = Parameter { "," Parameter };
 
-VarDecl ::= Type Identifier [ "=" Expression ] ";"
+Parameter       = Type Identifier;
 
-Parameters ::= Parameter { "," Parameter }
 
-Parameter ::= Type Identifier
+// Блоки и инструкции
+Statement       = Block
+                | IfStmt
+                | WhileStmt
+                | ForStmt
+                | ReturnStmt
+                | VarDecl
+                | ExprStmt
+                | EmptyStmt;
 
+Block           = "{" { Statement } "}";
 
-==================================================
-3. Statements
-==================================================
+IfStmt          = "if" "(" Expression ")" Statement [ "else" Statement ];
 
-Statement ::= Block
-            | IfStmt
-            | WhileStmt
-            | ForStmt
-            | ReturnStmt
-            | VarDecl
-            | ExprStmt
-            | EmptyStmt
+WhileStmt       = "while" "(" Expression ")" Statement;
 
-Block ::= "{" { Statement } "}"
+ForStmt         = "for" "(" [ ForInit ] ";" [ Expression ] ";" [ Expression ] ")" Statement;
 
-IfStmt ::= "if" "(" Expression ")" Statement [ "else" Statement ]
+ForInit         = VarDeclNoSemicolon
+                | Expression;
 
-WhileStmt ::= "while" "(" Expression ")" Statement
+VarDeclNoSemicolon = Type Identifier [ "=" Expression ];
 
-ForStmt ::= "for" "(" [ ForInit ] ";" [ Expression ] ";" [ Expression ] ")" Statement
+ReturnStmt      = "return" [ Expression ] ";";
 
-ForInit ::= VarDeclNoSemicolon
-          | Expression
+ExprStmt        = Expression ";";
 
-VarDeclNoSemicolon ::= Type Identifier [ "=" Expression ]
+EmptyStmt       = ";";
 
-ReturnStmt ::= "return" [ Expression ] ";"
 
-ExprStmt ::= Expression ";"
+//  Выражения с приоритетами (от низшего к высшему)
+Expression      = Assignment;
 
-EmptyStmt ::= ";"
+// Уровень 10: Присваивание (правоассоциативное)
+Assignment      = LogicalOr [ AssignmentOp Assignment ];
 
+AssignmentOp    = "="
+                | "+="
+                | "-="
+                | "*="
+                | "/=";
 
-==================================================
-4. Expressions
-==================================================
+// Уровень 9: Логическое ИЛИ (левоассоциативное)
+LogicalOr       = LogicalAnd { "||" LogicalAnd };
 
-Expression ::= Assignment
+// Уровень 8: Логическое И (левоассоциативное)
+LogicalAnd      = Equality { "&&" Equality };
 
-Assignment ::= LogicalOr [ AssignmentOp Assignment ]
+// Уровень 7: Равенство / неравенство (неассоциативное)
+Equality        = Relational [ EqualityOp Relational ];
 
-AssignmentOp ::= "="
-               | "+="
-               | "-="
-               | "*="
-               | "/="
+EqualityOp      = "==" | "!=";
 
-LogicalOr ::= LogicalAnd { "||" LogicalAnd }
+// Уровень 6: Сравнение (неассоциативное)
+Relational      = Additive [ RelOp Additive ];
 
-LogicalAnd ::= Equality { "&&" Equality }
+RelOp           = "<" | "<=" | ">" | ">=";
 
-Equality ::= Relational [ EqualityOp Relational ]
+// Уровень 5: Сложение / вычитание (левоассоциативное)
+Additive        = Multiplicative { AddOp Multiplicative };
 
-EqualityOp ::= "==" | "!="
+AddOp           = "+" | "-";
 
-Relational ::= Additive [ RelOp Additive ]
+// Уровень 4: Умножение / деление / остаток (левоассоциативное)
+Multiplicative  = Unary { MulOp Unary };
 
-RelOp ::= "<" | "<=" | ">" | ">="
+MulOp           = "*" | "/" | "%";
 
-Additive ::= Multiplicative { AddOp Multiplicative }
+// Уровень 3: Унарные операторы
+Unary           = PrefixOp Unary
+                | Postfix;
 
-AddOp ::= "+" | "-"
+PrefixOp        = "-"
+                | "!"
+                | "++"
+                | "--";
 
-Multiplicative ::= Unary { MulOp Unary }
+// Уровень 2: Постфиксные операции
+Postfix         = Primary { PostfixSuffix } [ PostfixOp ];
 
-MulOp ::= "*" | "/" | "%"
+PostfixSuffix   = CallSuffix
+                | FieldAccess;
 
-Unary ::= PrefixOp Unary
-        | Postfix
+CallSuffix      = "(" [ Arguments ] ")";
 
-PrefixOp ::= "-"
-           | "!"
-           | "++"
-           | "--"
+FieldAccess     = "." Identifier;
 
-Postfix ::= Primary { PostfixSuffix } [ PostfixOp ]
+PostfixOp       = "++" | "--";
 
-PostfixSuffix ::= CallSuffix
-                | FieldAccess
+Arguments       = Expression { "," Expression };
 
-CallSuffix ::= "(" [ Arguments ] ")"
 
-FieldAccess ::= "." Identifier
+//  Первичные выражения
+Primary         = Literal
+                | Identifier
+                | "(" Expression ")";
 
-PostfixOp ::= "++" | "--"
 
-Arguments ::= Expression { "," Expression }
+//  Типы
+Type            = BasicType
+                | UserType;
 
+BasicType       = "int"
+                | "float"
+                | "bool"
+                | "string"
+                | "void";
 
-==================================================
-5. Primary Expressions
-==================================================
+UserType        = Identifier;
 
-Primary ::= Literal
-          | Identifier
-          | "(" Expression ")"
 
+// Литералы
+Literal         = Integer
+                | Float
+                | String
+                | Boolean
+                | "null";
 
-==================================================
-6. Types
-==================================================
+Integer         = Digit { Digit };
 
-Type ::= BasicType
-       | UserType
+Float           = Digit { Digit } "." Digit { Digit };
 
-BasicType ::= "int"
-            | "float"
-            | "bool"
-            | "string"
-            | "void"
+String          = '"' { Character | EscapeSequence } '"';
 
-UserType ::= Identifier
+Boolean         = "true" | "false";
 
 
-==================================================
-7. Literals
-==================================================
+//  Идентификаторы
+Identifier      = Letter { Letter | Digit | "_" };
 
-Literal ::= Integer
-          | Float
-          | String
-          | Boolean
-          | "null"
 
+//  Терминальные символы
+Digit           = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 
-==================================================
-8. Operator Precedence
-==================================================
+Letter          = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J"
+                | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T"
+                | "U" | "V" | "W" | "X" | "Y" | "Z"
+                | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j"
+                | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t"
+                | "u" | "v" | "w" | "x" | "y" | "z";
 
-Highest -> Lowest
+EscapeSequence  = "\\" ( "n" | "t" | "r" | "\\" | '"' | "'" );
 
-1. Primary expressions
-2. Postfix expressions
-3. Unary operators
-4. Multiplicative
-5. Additive
-6. Relational
-7. Equality
-8. Logical AND
-9. Logical OR
-10. Assignment
+Character       = ? любой символ кроме '"', '\\', '\n', '\r' ?;
 
 
-==================================================
-9. Operator Associativity
-==================================================
+// Приоритеты операторов
+// 1. Primary expressions
+// 2. Postfix expressions
+// 3. Unary operators
+// 4. Multiplicative
+// 5. Additive
+// 6. Relational
+// 7. Equality
+// 8. Logical AND
+// 9. Logical OR
+// 10. Assignment
 
-Left-associative:
-    +  -  *  /  %  &&  ||
 
-Right-associative:
-    =  +=  -=  *=  /=
-    prefix ++  prefix --
+//  Ассоциативность
+// left-associative: + - * / % && ||
+// right-associative: = += -= *= /=
+// postfix: ++ --
+// non-associative: == != < <= > >=
 
-Postfix:
-    postfix ++  postfix --
 
-Non-associative:
-    ==  !=  <  <=  >  >=
-
-
-==================================================
-10. Parsing Notes
-==================================================
-
-- Grammar is designed for recursive descent parsing.
-- Lookahead: 1 token for standard LL(1) prediction.
-- "else" binds to the nearest preceding "if".
-- User-defined types are written as identifiers:
-      Point p;
-  not:
-      struct Point p;
-- Structure declarations use:
-      struct Point { int x; int y; }
+//  Примечания
+// EOF  - конец файла
+// { }  - повторение 0 или более раз
+// [ ]  - опционально
+// ( )  - группировка
+// |    - альтернатива
+// " "  - терминальный символ
+// ? ?  - специальная последовательность
+//
+// Грамматика рассчитана на recursive descent parsing.
+// "else" связывается с ближайшим предшествующим "if".
+// Пользовательские типы записываются так:
+//     Point p;
+// а не так:
+//     struct Point p;
+//
+// Объявление структуры записывается так:
+//     struct Point { int x; int y; }

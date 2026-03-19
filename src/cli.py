@@ -8,7 +8,7 @@ from src.preprocessor.macros import MacroProcessor
 from src.parser.parser import Parser
 from src.parser.ast import generate_dot, pretty_print, ast_to_json
 
-VERSION = "0.2.0"  # Обновляем версию для Спринта 2
+VERSION = "0.2.0"
 SPEC_PATH = Path("docs/language_spec.md")
 
 
@@ -107,10 +107,8 @@ def run_parse(args):
         if args.fail_fast:
             sys.exit(1)
 
-    # Вывод AST в требуемом формате
     output = None
     if args.format == "text":
-        # Используем Visitor для pretty printing
         from src.parser.visitor import ASTPrettyPrinter
         printer = ASTPrettyPrinter()
         printer.visit(ast)
@@ -127,7 +125,7 @@ def run_parse(args):
     else:
         print(output)
 
-    # Статистика в verbose режиме
+
     if args.verbose:
         print(f"\nStatistics:", file=sys.stderr)
         print(f"  Tokens: {len(tokens)}", file=sys.stderr)

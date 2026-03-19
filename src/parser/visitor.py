@@ -224,6 +224,7 @@ class ASTSemanticAnalyzer(ASTVisitor):
     def __init__(self):
         self.errors = []
         self.current_function = None
+
         self.variables = []
 
     def visit_LiteralExprNode(self, node):
