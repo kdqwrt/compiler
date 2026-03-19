@@ -77,12 +77,15 @@ MiniCompiler — учебный компилятор для упрощённог
 - экспорт в JSON
 - visitor для обхода AST
 
+
+
 ## Структура проекта
 
 ```text
 compiler-project/
 ├── src/
 │   ├── lexer/
+│   │   ├── __init__.py
 │   │   ├── scanner.py
 │   │   └── tokens.py
 │   ├── parser/
@@ -91,23 +94,21 @@ compiler-project/
 │   │   ├── parser.py
 │   │   └── visitor.py
 │   ├── preprocessor/
+│   │   ├── __init__.py
 │   │   ├── macros.py
-│   │   └── preprocessor.py
-│   ├── utils/
+│   │   ├── preprocessor.py
+│   │   └── test_p.py
 │   └── cli.py
 ├── tests/
-│   ├── lexer/
-│   ├── parser/
-│   │   └── golden/
 │   ├── test_cli.py
 │   ├── test_lexer.py
 │   ├── test_parser.py
-│   ├── test_p.py
 │   ├── test_performance.py
 │   └── test_runner.py
-├── examples/
 ├── docs/
+│   ├── grammar.md
 │   └── language_spec.md
+├── examples/
 ├── pyproject.toml
 └── README.md
 ```
@@ -191,60 +192,7 @@ pytest tests/test_cli.py -v
 python tests/test_runner.py
 ```
 
-## Формальная грамматика
 
-#### Формальная грамматика языка находится в:
-```text
-src/parser/grammar.txt
-```
-
-Грамматика записана в EBNF.
-Стартовый символ:
-```text
-Program ::= { TopLevelDecl } EOF
-```
-
-### Основные конструкции
-```text
-TopLevelDecl ::= FunctionDecl
-               | StructDecl
-               | VarDecl
-
-FunctionDecl ::= "fn" Identifier "(" [ Parameters ] ")" [ "->" Type ] Block
-StructDecl   ::= "struct" Identifier "{" { FieldDecl } "}"
-VarDecl      ::= Type Identifier [ "=" Expression ] ";"
-```
-### Операторы и приоритеты
-
-Приоритет операторов от большего к меньшему:
-
-- Primary expressions
-
-- Postfix expressions
-
-- Unary operators
-
-- Multiplicative
-
-- Additive
-
-- Relational
-
-- Equality
-
-- Logical AND
-
-- Logical OR
-
-- Assignment
-
-### Ассоциативность:
-
-- left-associative: `+ - * / % && ||`
-
-- right-associative: `= += -= *= /=`
-
-- non-associative: `== != < <= > >=`
 
 
 ### шпаргалка
