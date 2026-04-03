@@ -273,7 +273,7 @@ def test_cli_check_valid():
 
         assert result.returncode == 0
         assert result.stdout is not None
-        assert "No lexical errors" in result.stdout
+        assert "Semantic check passed successfully." in result.stdout
     finally:
         safe_unlink(path)
 
@@ -292,13 +292,11 @@ def test_cli_check_invalid():
         )
 
         assert result.returncode == 1
-        assert result.stdout is not None
-        assert "Syntax check failed" in result.stdout
+        assert result.stderr is not None
+        assert "Check failed:" in result.stderr
 
-        # Проверяем наличие ошибки
-        if result.stderr:
-            stderr_lower = result.stderr.lower()
-            assert any(word in stderr_lower for word in ["символ", "unknown", "invalid", "@"])
+        stderr_lower = result.stderr.lower()
+        assert any(word in stderr_lower for word in ["символ", "unknown", "invalid", "@"])
     finally:
         safe_unlink(path)
 

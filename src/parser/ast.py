@@ -47,7 +47,11 @@ class StatementNode(ASTNode):
 
 
 class ExpressionNode(ASTNode):
-    pass
+    def __init__(self, line, column):
+        super().__init__(line, column)
+        self.inferred_type = None
+        self.symbol = None
+        self.constant_value = None
 
 
 class ProgramNode(ASTNode):

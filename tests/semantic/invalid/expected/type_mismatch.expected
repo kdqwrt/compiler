@@ -1,0 +1,5 @@
+semantic error: type mismatch in assignment
+  --> tests\semantic\invalid\samples\type_mismatch.src:3:7
+  = context: in function 'main'
+  = expected: int
+  = found: string

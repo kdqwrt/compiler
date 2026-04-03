@@ -7,8 +7,9 @@ from src.preprocessor.preprocessor import Preprocessor
 from src.preprocessor.macros import MacroProcessor
 from src.parser.parser import Parser
 from src.parser.ast import generate_dot, pretty_print, ast_to_json
+from src.semantic.analyzer import SemanticAnalyzer
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 SPEC_PATH = Path("docs/language_spec.md")
 
 
@@ -87,7 +88,6 @@ def run_lex(args):
 def run_parse(args):
     source = read_file(args.input)
 
-    # Лексический анализ
     scanner = Scanner(source)
     tokens = scanner.scan_tokens()
 
@@ -97,7 +97,6 @@ def run_parse(args):
         if args.fail_fast:
             sys.exit(1)
 
-    # Синтаксический анализ
     parser = Parser(tokens)
     ast = parser.parse()
 
@@ -125,13 +124,15 @@ def run_parse(args):
     else:
         print(output)
 
-
     if args.verbose:
-        print(f"\nStatistics:", file=sys.stderr)
+        print("\nStatistics:", file=sys.stderr)
         print(f"  Tokens: {len(tokens)}", file=sys.stderr)
         print(f"  Lexical errors: {len(lex_errors)}", file=sys.stderr)
         print(f"  Parse errors: {len(parse_errors)}", file=sys.stderr)
-        print(f"  AST nodes: {ast.count_nodes() if hasattr(ast, 'count_nodes') else 'N/A'}", file=sys.stderr)
+        print(
+            f"  AST nodes: {ast.count_nodes() if hasattr(ast, 'count_nodes') else 'N/A'}",
+            file=sys.stderr,
+        )
 
 
 def run_full(args):
@@ -179,22 +180,105 @@ def run_check(args):
     source = read_file(args.input)
 
     scanner = Scanner(source)
-    scanner.scan_tokens()
-    errors = scanner.get_errors()
+    tokens = scanner.scan_tokens()
+    lex_errors = scanner.get_errors()
 
-    if errors:
-        print("Syntax check failed.")
-        print_errors(errors)
+    if lex_errors:
+        print("Check failed: lexical errors found.", file=sys.stderr)
+        print_errors(lex_errors)
         sys.exit(1)
 
-    print("No lexical errors detected.")
+    parser = Parser(tokens)
+    ast = parser.parse()
+    parse_errors = parser.get_errors()
+
+    if parse_errors:
+        print("Check failed: syntax errors found.", file=sys.stderr)
+        print_errors(parse_errors)
+        sys.exit(1)
+
+    analyzer = SemanticAnalyzer(args.input)
+    analyzer.analyze(ast)
+    semantic_errors = analyzer.get_errors()
+
+    if semantic_errors:
+        print("Check failed: semantic errors found.", file=sys.stderr)
+        for error in semantic_errors:
+            print(error.format(), file=sys.stderr)
+            print(file=sys.stderr)
+        sys.exit(1)
+
+    print("Semantic check passed successfully.")
+
+    if getattr(args, "show_types", False):
+        print("\nType Inference Report:")
+        print(analyzer.format_type_report())
+
+    if getattr(args, "show_ast", False):
+        print("\nDecorated AST:")
+        print(analyzer.format_decorated_ast())
+
+    if getattr(args, "show_report", False):
+        print("\nValidation Report:")
+        print(analyzer.format_validation_report())
+
+    if getattr(args, "verbose", False):
+        print("\nStatistics:", file=sys.stderr)
+        print(f"  Tokens: {len(tokens)}", file=sys.stderr)
+        print(f"  Lexical errors: {len(lex_errors)}", file=sys.stderr)
+        print(f"  Parse errors: {len(parse_errors)}", file=sys.stderr)
+        print(f"  Semantic errors: {len(semantic_errors)}", file=sys.stderr)
+        print(
+            f"  AST nodes: {ast.count_nodes() if hasattr(ast, 'count_nodes') else 'N/A'}",
+            file=sys.stderr,
+        )
+
+
+def run_symbols(args):
+    source = read_file(args.input)
+
+    scanner = Scanner(source)
+    tokens = scanner.scan_tokens()
+    lex_errors = scanner.get_errors()
+
+    if lex_errors:
+        print("Cannot dump symbols: lexical errors found.", file=sys.stderr)
+        print_errors(lex_errors)
+        sys.exit(1)
+
+    parser = Parser(tokens)
+    ast = parser.parse()
+    parse_errors = parser.get_errors()
+
+    if parse_errors:
+        print("Cannot dump symbols: syntax errors found.", file=sys.stderr)
+        print_errors(parse_errors)
+        sys.exit(1)
+
+    analyzer = SemanticAnalyzer(args.input)
+    analyzer.analyze(ast)
+    semantic_errors = analyzer.get_errors()
+
+    if semantic_errors:
+        print("Cannot dump symbols: semantic errors found.", file=sys.stderr)
+        for error in semantic_errors:
+            print(error.format(), file=sys.stderr)
+            print(file=sys.stderr)
+        sys.exit(1)
+
+    output = analyzer.get_symbol_table().dump()
+
+    if args.output:
+        Path(args.output).write_text(output, encoding="utf-8")
+    else:
+        print(output)
 
 
 def run_info():
     print("MiniCompiler")
     print(f"Version: {VERSION}")
     print("Language: Simplified C-like")
-    print("Sprint: 2 (Lexer + Parser + AST)")
+    print("Sprint: 3 (Lexer + Parser + AST + Semantic Analysis)")
 
 
 def run_spec():
@@ -203,9 +287,9 @@ def run_spec():
         sys.exit(1)
 
     content = SPEC_PATH.read_text(encoding="utf-8")
-
-    # пишем байты напрямую, без cp1251 кодирования
     sys.stdout.buffer.write(content.encode("utf-8"))
+
+
 def main():
     parser = argparse.ArgumentParser(prog="compiler")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -226,16 +310,14 @@ def main():
     lex.add_argument("--fail-fast", action="store_true")
     lex.set_defaults(func=run_lex)
 
-    # parse (новая команда)
+    # parse
     parse = sub.add_parser("parse", help="Parse source file and output AST")
     parse.add_argument("--input", required=True)
-
     parse.add_argument(
         "--output", "--output-file",
         dest="output",
         help="Output file (default: stdout)"
     )
-
     parse.add_argument(
         "--format", "--ast-format",
         dest="format",
@@ -243,7 +325,6 @@ def main():
         default="text",
         help="AST output format"
     )
-
     parse.add_argument("--verbose", action="store_true", help="Show parsing statistics")
     parse.add_argument("--fail-fast", action="store_true", help="Stop on first error")
     parse.set_defaults(func=run_parse)
@@ -255,9 +336,19 @@ def main():
     full.set_defaults(func=run_full)
 
     # check
-    check = sub.add_parser("check")
+    check = sub.add_parser("check", help="Run full semantic analysis")
     check.add_argument("--input", required=True)
+    check.add_argument("--verbose", action="store_true", help="Show analysis statistics")
+    check.add_argument("--show-types", action="store_true", help="Show inferred types")
+    check.add_argument("--show-ast", action="store_true", help="Show decorated AST")
+    check.add_argument("--show-report", action="store_true", help="Show semantic validation report")
     check.set_defaults(func=run_check)
+
+    # symbols
+    symbols = sub.add_parser("symbols", help="Dump symbol table after semantic analysis")
+    symbols.add_argument("--input", required=True)
+    symbols.add_argument("--output", help="Output file (default: stdout)")
+    symbols.set_defaults(func=run_symbols)
 
     # info
     info = sub.add_parser("info")

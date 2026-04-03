@@ -1,0 +1,45 @@
+Semantic check passed successfully.
+
+Semantic summary: errors=0, warnings=0, categories=[none]
+
+Declared symbols by scope:
+Scope 'global' (global, depth=0)
+  - function, main, type=fn() -> void, returns=void, scope=global, depth=0, order=0, declared at 1:4
+  Scope 'main' (function, depth=1)
+    - variable, x, type=int, offset=0, size=4, align=4, scope=main, depth=1, order=0, declared at 2:9
+    Scope 'block' (block, depth=2)
+      - variable, y, type=int, offset=4, size=4, align=4, scope=block, depth=2, order=0, declared at 5:13
+    Scope 'block' (block, depth=2)
+      <empty>
+
+Memory Layout:
+  Scope 'global' (global, depth=0)
+    <no layout data>
+    Scope 'main' (function, depth=1)
+      - x: type=int, offset=0, size=4, align=4
+      Scope 'block' (block, depth=2)
+        - y: type=int, offset=4, size=4, align=4
+      Scope 'block' (block, depth=2)
+        <no layout data>
+
+Type hierarchy information:
+Builtin types: int, float, bool, void, string
+Rules:
+  - int -> float implicit widening allowed
+  - struct types compare by name
+  - function types compare by parameter types and return type
+
+Type inference results:
+Line 2:13 LiteralExprNode -> int, const=1
+Line 4:9 LiteralExprNode -> bool, const=True
+Line 5:19 BinaryExprNode -> int
+Line 5:17 IdentifierExprNode -> int
+Line 5:21 LiteralExprNode -> int, const=1
+Line 6:11 AssignmentExprNode -> int
+Line 6:9 IdentifierExprNode -> int
+Line 6:13 IdentifierExprNode -> int
+Line 9:14 BinaryExprNode -> bool
+Line 9:12 IdentifierExprNode -> int
+Line 9:16 LiteralExprNode -> int, const=10
+Line 10:10 UnaryExprNode -> int
+Line 10:9 IdentifierExprNode -> int

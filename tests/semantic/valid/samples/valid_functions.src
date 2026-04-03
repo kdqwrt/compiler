@@ -1,0 +1,13 @@
+fn add(int a, int b) -> int {
+    return a + b;
+}
+
+fn mix(int a, float b) -> float {
+    return a + b;
+}
+
+fn main() -> void {
+    int x = add(2, 3);
+    float y = mix(x, 4.5);
+    return;
+}

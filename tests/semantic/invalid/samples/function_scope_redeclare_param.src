@@ -1,0 +1,4 @@
+fn foo(int x) -> void {
+    int x = 10;
+    return;
+}

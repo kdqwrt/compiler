@@ -8,6 +8,9 @@ MiniCompiler — учебный компилятор для упрощённог
 - синтаксический анализ
 - построение AST
 - вывод AST в форматах text, DOT и JSON
+- семантический анализ
+- таблица символов
+- система типов
 - набор модульных и golden-тестов
 
 ---
@@ -20,7 +23,6 @@ MiniCompiler — учебный компилятор для упрощённог
 - [Установка](#установка)
 - [Быстрый старт](#быстрый-старт)
 - [CLI](#cli)
-- [Команда parse](#команда-parse)
 - [Формальная грамматика](#формальная-грамматика)
 - [AST](#ast)
 - [Тестирование](#тестирование)
@@ -44,6 +46,65 @@ MiniCompiler — учебный компилятор для упрощённог
 - операторы `++` и `--`
 - отслеживание позиции токена: строка и колонка
 - восстановление после части лексических ошибок
+
+### Парсер
+- построение AST из токенов
+- базовое восстановление после синтаксических ошибок
+- обработка:
+  - объявлений переменных
+  - объявлений функций
+  - объявлений структур
+  - блоков
+  - `if / else`
+  - `while`
+  - `for`
+  - `return`
+  - выражений
+  - вызовов функций
+  - доступа к полям структуры
+
+### Семантический анализатор
+- иерархическая таблица символов (symbol table)
+- области видимости: global, function, block и struct scope
+- регистрация функций, параметров, переменных и структур
+- проверка duplicate declaration (повторного объявления)
+- проверка undeclared identifier (использования необъявленного идентификатора)
+- проверка use before declaration (использования до объявления)
+- проверка uninitialized variable (использования неинициализированной переменной)
+- проверка type mismatch (несовпадения типов)
+- проверка вызовов функций:
+  - число аргументов
+  - типы аргументов
+  - соответствие return type
+- проверка булевых условий в `if`, `while`, `for`
+- проверка изменяемости целевого объекта для операций присваивания и `++/--`
+- decorated AST:
+  - `inferred_type` — выведенный тип выражения
+  - `symbol` — ссылка на запись в таблице символов
+  - `constant_value` — вычисленное значение константы (если возможно)
+- формирование validation report (отчёта о проверке)
+- вывод таблицы символов (symbol table dump)
+- сводка по размещению в памяти (memory layout summary)
+
+## AST
+
+Абстрактное синтаксическое дерево (Abstract Syntax Tree, AST) используется как промежуточное представление программы.
+
+Поддерживается:
+
+- текстовый вывод (pretty-print)
+- экспорт в JSON
+- экспорт в Graphviz DOT
+- обход дерева с помощью visitor pattern
+
+## Тестирование
+
+В проекте используются:
+
+- модульные тесты (unit tests)
+- golden tests (сравнение с эталонным выводом)
+- интеграционные тесты CLI
+- тесты производительности
 
 
 ## Технические характеристики
@@ -77,15 +138,12 @@ MiniCompiler — учебный компилятор для упрощённог
 - экспорт в JSON
 - visitor для обхода AST
 
-
-
 ## Структура проекта
 
 ```text
 compiler-project/
 ├── src/
 │   ├── lexer/
-│   │   ├── __init__.py
 │   │   ├── scanner.py
 │   │   └── tokens.py
 │   ├── parser/
@@ -94,21 +152,40 @@ compiler-project/
 │   │   ├── parser.py
 │   │   └── visitor.py
 │   ├── preprocessor/
-│   │   ├── __init__.py
 │   │   ├── macros.py
-│   │   ├── preprocessor.py
-│   │   └── test_p.py
+│   │   └── preprocessor.py
+│   ├── semantic/
+│   │   ├── analyzer.py
+│   │   ├── errors.py
+│   │   ├── symbol_table.py
+│   │   └── type_system.py
+│   ├── utils/
 │   └── cli.py
 ├── tests/
+│   ├── lexer/
+│   ├── parser/
+│   │   └── golden/
+│   ├── semantic/
+│   │   ├── invalid/
+│   │   │   ├── expected/
+│   │   │   └── samples/
+│   │   └── valid/
+│   │       ├── expected/
+│   │       └── samples/
 │   ├── test_cli.py
+│   ├── test_golden_valid.py
+│   ├── test_increment.py
 │   ├── test_lexer.py
+│   ├── test_p.py
 │   ├── test_parser.py
 │   ├── test_performance.py
+│   ├── test_symbol_table.py
+│   ├── test_type_system.py
 │   └── test_runner.py
-├── docs/
-│   ├── grammar.md
-│   └── language_spec.md
 ├── examples/
+├── docs/
+│   ├── language_spec.md
+│   └── grammar.md
 ├── pyproject.toml
 └── README.md
 ```
@@ -132,14 +209,20 @@ pip install -e .
 pip install -e ".[dev]"
 ```
 
+### CLI
+
+
+
+
 ### Быстрый старт
 
 Создайте тестовый файл examples/hello.src:
 
 ```bash
-fn main() {
+fn main() -> void {
     int x = 42;
     string msg = "Hello";
+    return;
 }
 ```
 ### Препроцессор
@@ -192,7 +275,60 @@ pytest tests/test_cli.py -v
 python tests/test_runner.py
 ```
 
+## Формальная грамматика
 
+#### Формальная грамматика языка находится в:
+```text
+src/parser/grammar.txt
+```
+
+Грамматика записана в EBNF.
+Стартовый символ:
+```text
+Program ::= { TopLevelDecl } EOF
+```
+
+### Основные конструкции
+```text
+TopLevelDecl ::= FunctionDecl
+               | StructDecl
+               | VarDecl
+
+FunctionDecl ::= "fn" Identifier "(" [ Parameters ] ")" [ "->" Type ] Block
+StructDecl   ::= "struct" Identifier "{" { FieldDecl } "}"
+VarDecl      ::= Type Identifier [ "=" Expression ] ";"
+```
+### Операторы и приоритеты
+
+Приоритет операторов от большего к меньшему:
+
+- Primary expressions
+
+- Postfix expressions
+
+- Unary operators
+
+- Multiplicative
+
+- Additive
+
+- Relational
+
+- Equality
+
+- Logical AND
+
+- Logical OR
+
+- Assignment
+
+### Ассоциативность:
+
+- left-associative: `+ - * / % && ||`
+
+- right-associative: `= += -= *= /=`
+
+- non-associative: `== != < <= > >=`
 
 
 ### шпаргалка
@@ -210,4 +346,14 @@ compiler parse --input hello1.src --format json --output ast.json
 compiler parse --input hello1.src --format dot --output ast.dot
 
 dot -Tpng ast.dot -o ast.png
+
+compiler check --input hello1.src
+
+compiler check --input hello1.src --show-types
+
+compiler check --input hello1.src --show-ast
+
+compiler check --input hello1.src --show-report
+
+compiler symbols --input hello1.src
 ```

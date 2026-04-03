@@ -1,0 +1,7 @@
+struct Point {
+    void x;
+}
+
+fn main() -> void {
+    return;
+}

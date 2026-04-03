@@ -218,24 +218,3 @@ class ASTPrettyPrinter(ASTVisitor):
         return str(expr)
 
 
-class ASTSemanticAnalyzer(ASTVisitor):
-
-
-    def __init__(self):
-        self.errors = []
-        self.current_function = None
-
-        self.variables = []
-
-    def visit_LiteralExprNode(self, node):
-        if isinstance(node.value, int):
-            INT_MIN = -(2 ** 31)
-            INT_MAX = 2 ** 31 - 1
-            if node.value < INT_MIN or node.value > INT_MAX:
-                self.errors.append(
-                    f"[Строка {node.line}, Колонка {node.column}] "
-                    f"Целое число вне диапазона 32-бит: {node.value}"
-                )
-
-    def get_errors(self):
-        return self.errors

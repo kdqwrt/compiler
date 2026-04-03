@@ -1,0 +1,54 @@
+Semantic check passed successfully.
+
+Semantic summary: errors=0, warnings=0, categories=[none]
+
+Declared symbols by scope:
+Scope 'global' (global, depth=0)
+  - function, add, type=fn(int, int) -> int, returns=int, scope=global, depth=0, order=0, declared at 1:4
+  - function, mix, type=fn(int, float) -> float, returns=float, scope=global, depth=0, order=1, declared at 5:4
+  - function, main, type=fn() -> void, returns=void, scope=global, depth=0, order=2, declared at 9:4
+  Scope 'add' (function, depth=1)
+    - parameter, a, type=int, scope=add, depth=1, order=0, declared at 1:12
+    - parameter, b, type=int, scope=add, depth=1, order=1, declared at 1:19
+  Scope 'mix' (function, depth=1)
+    - parameter, a, type=int, scope=mix, depth=1, order=0, declared at 5:12
+    - parameter, b, type=float, scope=mix, depth=1, order=1, declared at 5:21
+  Scope 'main' (function, depth=1)
+    - variable, x, type=int, offset=0, size=4, align=4, scope=main, depth=1, order=0, declared at 10:9
+    - variable, y, type=float, offset=4, size=8, align=8, scope=main, depth=1, order=1, declared at 11:11
+
+Memory Layout:
+  Scope 'global' (global, depth=0)
+    <no layout data>
+    Scope 'add' (function, depth=1)
+      - a: type=int, offset=None, size=None, align=None
+      - b: type=int, offset=None, size=None, align=None
+    Scope 'mix' (function, depth=1)
+      - a: type=int, offset=None, size=None, align=None
+      - b: type=float, offset=None, size=None, align=None
+    Scope 'main' (function, depth=1)
+      - x: type=int, offset=0, size=4, align=4
+      - y: type=float, offset=4, size=8, align=8
+
+Type hierarchy information:
+Builtin types: int, float, bool, void, string
+Rules:
+  - int -> float implicit widening allowed
+  - struct types compare by name
+  - function types compare by parameter types and return type
+
+Type inference results:
+Line 2:14 BinaryExprNode -> int
+Line 2:12 IdentifierExprNode -> int
+Line 2:16 IdentifierExprNode -> int
+Line 6:14 BinaryExprNode -> float
+Line 6:12 IdentifierExprNode -> int
+Line 6:16 IdentifierExprNode -> float
+Line 10:21 CallExprNode -> int
+Line 10:13 IdentifierExprNode -> fn(int, int) -> int
+Line 10:17 LiteralExprNode -> int, const=2
+Line 10:20 LiteralExprNode -> int, const=3
+Line 11:25 CallExprNode -> float
+Line 11:15 IdentifierExprNode -> fn(int, float) -> float
+Line 11:19 IdentifierExprNode -> int
+Line 11:22 LiteralExprNode -> float, const=4.5
