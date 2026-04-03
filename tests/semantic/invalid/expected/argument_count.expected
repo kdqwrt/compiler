@@ -1,0 +1,6 @@
+semantic error: argument count mismatch in call to 'add'
+  --> tests\semantic\invalid\samples\argument_count.src:6:18
+  = context: in function 'main'
+  = expected: 2
+  = found: 1
+  = note: function signature: fn(int, int) -> int

@@ -1,0 +1,5 @@
+semantic error: operator '++' requires numeric operand
+  --> tests\semantic\invalid\samples\invalid_increment.src:3:9
+  = context: in function 'main'
+  = expected: int or float
+  = found: bool

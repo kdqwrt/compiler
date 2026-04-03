@@ -1,0 +1,3 @@
+semantic error: duplicate declaration 'x'
+  --> tests\semantic\invalid\samples\duplicate_declaration.src:3:9
+  = context: in function 'main'

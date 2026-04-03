@@ -1,0 +1,5 @@
+semantic error: if condition must have type bool
+  --> tests\semantic\invalid\samples\invalid_condition.src:4:9
+  = context: in function 'main'
+  = expected: bool
+  = found: int

@@ -1,0 +1,3 @@
+semantic error: field 'x' cannot have type void
+  --> tests\semantic\invalid\samples\invalid_struct_field.src:2:10
+  = context: in struct 'Point'
