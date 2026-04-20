@@ -1,0 +1,21 @@
+function main: int ()
+  # Variable map:
+  #   x -> x
+  # Locals: x
+  entry:
+    x = ALLOCA 4    # allocate x
+    STORE x, 0    # initialize x
+    JUMP while_cond1    # while condition
+  while_cond1:
+    t1 = LOAD x    # load x
+    t2 = CMP_LT t1, 3    # < expression
+    JUMP_IF_NOT t2, while_exit3    # while false
+    JUMP while_body2    # while true
+  while_body2:
+    t3 = LOAD x    # load x
+    t4 = ADD t3, 1    # + expression
+    STORE x, t4    # x = ...
+    JUMP while_cond1    # while repeat
+  while_exit3:
+    t5 = LOAD x    # load x
+    RETURN t5    # return

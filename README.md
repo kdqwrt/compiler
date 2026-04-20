@@ -356,4 +356,15 @@ compiler check --input hello1.src --show-ast
 compiler check --input hello1.src --show-report
 
 compiler symbols --input hello1.src
+
+compiler ir --input hello.src
+
+compiler ir --input hello.src --format dot --output cfg.dot
+
+dot -Tpng cfg.dot -o cfg.png
+
+compiler ir --input hello.src --stats
+
+compiler ir --input hello.src --validate
+
 ```

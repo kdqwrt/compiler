@@ -8,6 +8,8 @@ from src.preprocessor.macros import MacroProcessor
 from src.parser.parser import Parser
 from src.parser.ast import generate_dot, pretty_print, ast_to_json
 from src.semantic.analyzer import SemanticAnalyzer
+from src.ir.ir_generator import IRGenerator
+from src.ir.validator import IRValidator
 
 VERSION = "0.3.0"
 SPEC_PATH = Path("docs/language_spec.md")
@@ -274,11 +276,156 @@ def run_symbols(args):
         print(output)
 
 
+def run_ir(args):
+    source = read_file(args.input)
+
+    scanner = Scanner(source)
+    tokens = scanner.scan_tokens()
+    lex_errors = scanner.get_errors()
+
+    if lex_errors:
+        print("Cannot generate IR: lexical errors found.", file=sys.stderr)
+        print_errors(lex_errors)
+        sys.exit(1)
+
+    parser = Parser(tokens)
+    ast = parser.parse()
+    parse_errors = parser.get_errors()
+
+    if parse_errors:
+        print("Cannot generate IR: syntax errors found.", file=sys.stderr)
+        print_errors(parse_errors)
+        sys.exit(1)
+
+    analyzer = SemanticAnalyzer(args.input)
+    analyzer.analyze(ast)
+    semantic_errors = analyzer.get_errors()
+
+    if semantic_errors:
+        print("Cannot generate IR: semantic errors found.", file=sys.stderr)
+        for error in semantic_errors:
+            print(error.format(), file=sys.stderr)
+            print(file=sys.stderr)
+        sys.exit(1)
+
+    ir_gen = IRGenerator(analyzer.get_symbol_table())
+    program = ir_gen.generate(ast)
+
+
+    if getattr(args, "validate", False):
+        validation = IRValidator(program).validate()
+        if not validation.is_valid():
+            print("IR validation failed.", file=sys.stderr)
+            for error in validation.errors:
+                print(error, file=sys.stderr)
+            sys.exit(1)
+
+    if args.format == "text":
+        output = program.to_text()
+
+    elif args.format == "json":
+        output = __import__("json").dumps(program.to_json(), ensure_ascii=False, indent=2)
+
+
+    elif args.format == "dot":
+
+        lines = [
+
+            "digraph CFG {",
+
+            '  rankdir=TB;',
+
+            '  node [shape=box, style="rounded,filled", fontname="Consolas"];'
+
+        ]
+
+        for func in program.functions:
+
+            for block in func.blocks:
+
+                label_lines = [block.label]
+
+                for instr in block.instructions:
+                    label_lines.append(instr.to_text().replace('"', '\\"'))
+
+                node_label = "\\l".join(label_lines) + "\\l"
+
+                node_name = f"{func.name}_{block.label}"
+
+                if block.label == "entry":
+
+                    fill = "lightgreen"
+
+                elif "exit" in block.label:
+
+                    fill = "lightcoral"
+
+                elif block.label.startswith("then"):
+
+                    fill = "lightblue"
+
+                elif block.label.startswith("else"):
+
+                    fill = "lightyellow"
+
+                elif "endif" in block.label:
+
+                    fill = "plum"
+
+                elif "while_cond" in block.label or "for_cond" in block.label:
+
+                    fill = "khaki"
+
+                elif "while_body" in block.label or "for_body" in block.label:
+
+                    fill = "lightsalmon"
+
+                else:
+
+                    fill = "white"
+
+                lines.append(
+
+                    f'  "{node_name}" [label="{node_label}", fillcolor="{fill}"];'
+
+                )
+
+            for block in func.blocks:
+
+                from_node = f"{func.name}_{block.label}"
+
+                for succ in block.successors:
+                    to_node = f"{func.name}_{succ}"
+
+                    lines.append(f'  "{from_node}" -> "{to_node}";')
+
+        lines.append("}")
+
+        output = "\n".join(lines)
+
+    else:
+        print(f"Unsupported IR format: {args.format}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.output:
+        Path(args.output).write_text(output, encoding="utf-8")
+    else:
+        print(output)
+
+    if getattr(args, "stats", False):
+        stats = program.get_statistics()
+        print("\nIR Statistics:", file=sys.stderr)
+        print(f"  Functions: {stats['functions']}", file=sys.stderr)
+        print(f"  Basic blocks: {stats['basic_blocks']}", file=sys.stderr)
+        print(f"  Instructions: {stats['instructions']}", file=sys.stderr)
+        print(f"  Temporaries used: {stats['temporaries']}", file=sys.stderr)
+
+
 def run_info():
     print("MiniCompiler")
     print(f"Version: {VERSION}")
     print("Language: Simplified C-like")
-    print("Sprint: 3 (Lexer + Parser + AST + Semantic Analysis)")
+    print("Sprint: 4 (Semantic Analysis + Intermediate Representation + CFG + Validation)")
 
 
 def run_spec():
@@ -349,6 +496,20 @@ def main():
     symbols.add_argument("--input", required=True)
     symbols.add_argument("--output", help="Output file (default: stdout)")
     symbols.set_defaults(func=run_symbols)
+
+    # ir
+    ir = sub.add_parser("ir", help="Generate intermediate representation (IR)")
+    ir.add_argument("--input", required=True)
+    ir.add_argument("--output", help="Output file (default: stdout)")
+    ir.add_argument(
+        "--format",
+        choices=["text", "dot", "json"],
+        default="text",
+        help="IR output format"
+    )
+    ir.add_argument("--stats", action="store_true", help="Show IR statistics")
+    ir.set_defaults(func=run_ir)
+    ir.add_argument("--validate", action="store_true", help="Validate generated IR")
 
     # info
     info = sub.add_parser("info")

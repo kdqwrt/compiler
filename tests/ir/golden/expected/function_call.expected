@@ -1,0 +1,17 @@
+function foo: int (int x)
+  entry:
+    t1 = LOAD x    # load x
+    t2 = ADD t1, 1    # + expression
+    RETURN t2    # return
+
+function main: int ()
+  # Variable map:
+  #   y -> y
+  # Locals: y
+  entry:
+    y = ALLOCA 4    # allocate y
+    STORE y, 5    # initialize y
+    t1 = LOAD y    # load y
+    PARAM 0, t1    # param 0
+    t2 = CALL foo    # call foo
+    RETURN t2    # return

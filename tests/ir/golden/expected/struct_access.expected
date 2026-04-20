@@ -1,0 +1,11 @@
+function main: int ()
+  # Variable map:
+  #   p -> p
+  # Locals: p
+  entry:
+    p = ALLOCA 16    # allocate p
+    t1 = GEP p, 0    # address of p.x
+    STORE [t1], 10    # p.x = ...
+    t2 = GEP p, 0    # address of p.x
+    t3 = LOAD [t2]    # load field p.x
+    RETURN t3    # return

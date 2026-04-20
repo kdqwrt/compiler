@@ -1,0 +1,21 @@
+function main: int ()
+  # Variable map:
+  #   x -> x
+  # Locals: x
+  entry:
+    x = ALLOCA 4    # allocate x
+    STORE x, 0    # initialize x
+    t1 = CMP_LT 1, 2    # < expression
+    JUMP_IF_NOT t1, else3    # if false
+    JUMP then1    # if true
+  then1:
+    STORE x, 10    # x = ...
+    JUMP endif2    # end if
+  else3:
+    STORE x, 20    # x = ...
+    JUMP endif2    # end if
+  endif2:
+    t2 = PHI (10, then1), (20, else3)    # merge x
+    STORE x, t2    # store merged x
+    t3 = LOAD x    # load x
+    RETURN t3    # return

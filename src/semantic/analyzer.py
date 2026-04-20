@@ -812,6 +812,12 @@ class SemanticAnalyzer(ASTVisitor):
         if isinstance(node.target, IdentifierExprNode) and node.target.symbol is not None:
             node.target.symbol.initialized = True
 
+        elif isinstance(node.target, StructAccessExprNode):
+            if isinstance(node.target.primary, IdentifierExprNode):
+                base_symbol = self.symbol_table.lookup(node.target.primary.name.lexeme)
+                if base_symbol is not None:
+                    base_symbol.initialized = True
+
         node.inferred_type = target_type
         return target_type
 

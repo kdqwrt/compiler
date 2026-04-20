@@ -1,0 +1,4 @@
+function main: int ()
+  entry:
+    t1 = ADD 2, 3    # + expression
+    RETURN t1    # return

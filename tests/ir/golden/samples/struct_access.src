@@ -1,0 +1,10 @@
+struct Point {
+    int x;
+    int y;
+}
+
+fn main() -> int {
+    Point p;
+    p.x = 10;
+    return p.x;
+}
