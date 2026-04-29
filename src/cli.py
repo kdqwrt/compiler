@@ -10,6 +10,7 @@ from src.parser.ast import generate_dot, pretty_print, ast_to_json
 from src.semantic.analyzer import SemanticAnalyzer
 from src.ir.ir_generator import IRGenerator
 from src.ir.validator import IRValidator
+from src.codegen.x86_generator import X86Generator
 
 VERSION = "0.3.0"
 SPEC_PATH = Path("docs/language_spec.md")
@@ -421,6 +422,49 @@ def run_ir(args):
         print(f"  Temporaries used: {stats['temporaries']}", file=sys.stderr)
 
 
+
+def run_compile(args):
+    source = read_file(args.input)
+
+    scanner = Scanner(source)
+    tokens = scanner.scan_tokens()
+    lex_errors = scanner.get_errors()
+
+    if lex_errors:
+        print("Cannot compile: lexical errors found.", file=sys.stderr)
+        print_errors(lex_errors)
+        sys.exit(1)
+
+    parser = Parser(tokens)
+    ast = parser.parse()
+    parse_errors = parser.get_errors()
+
+    if parse_errors:
+        print("Cannot compile: syntax errors found.", file=sys.stderr)
+        print_errors(parse_errors)
+        sys.exit(1)
+
+    analyzer = SemanticAnalyzer(args.input)
+    analyzer.analyze(ast)
+    semantic_errors = analyzer.get_errors()
+
+    if semantic_errors:
+        print("Cannot compile: semantic errors found.", file=sys.stderr)
+        for error in semantic_errors:
+            print(error.format(), file=sys.stderr)
+            print(file=sys.stderr)
+        sys.exit(1)
+
+    ir_program = IRGenerator(analyzer.get_symbol_table()).generate(ast)
+    asm = X86Generator().generate(ir_program)
+
+    if args.output:
+        Path(args.output).write_text(asm, encoding="utf-8")
+    else:
+        print(asm)
+
+
+
 def run_info():
     print("MiniCompiler")
     print(f"Version: {VERSION}")
@@ -510,6 +554,12 @@ def main():
     ir.add_argument("--stats", action="store_true", help="Show IR statistics")
     ir.set_defaults(func=run_ir)
     ir.add_argument("--validate", action="store_true", help="Validate generated IR")
+
+    # compile
+    compile_cmd = sub.add_parser("compile", help="Compile source to x86-64 assembly")
+    compile_cmd.add_argument("--input", required=True)
+    compile_cmd.add_argument("--output", help="Output assembly file (default: stdout)")
+    compile_cmd.set_defaults(func=run_compile)
 
     # info
     info = sub.add_parser("info")
