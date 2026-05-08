@@ -6,26 +6,85 @@ from src.ir.basic_block import IRProgram, IRFunction
 from src.ir.ir_instructions import IROpcode, IROperandKind
 from src.codegen.stack_frame import StackFrame
 from src.codegen.abi import INT_ARG_REGISTERS
+from src.codegen.register_allocator import LinearScanRegisterAllocator
+
+
 
 class X86Generator:
-    def __init__(self) -> None:
+    def __init__(self, use_register_allocation: bool = False) -> None:
         self.lines: List[str] = []
         self.current_function: Optional[IRFunction] = None
         self.stack_frame: Optional[StackFrame] = None
         self.pending_params: dict[int, object] = {}
+        self.skip_next_phi_store: bool = False
+
+        self.use_register_allocation = use_register_allocation
+        self.register_allocation: dict[str, str] = {}
+        self.used_allocated_registers: set[str] = set()
+        self.global_variable_names: set[str] = set()
 
     def generate(self, program: IRProgram) -> str:
         self.lines = []
+
+        self.global_variable_names = {
+            var.name for var in getattr(program, "global_variables", [])
+        }
+
+        self._emit_global_sections(program)
+
         self.lines.append("section .text")
+        self.lines.append("")
+        self.lines.append("extern print_int")
+        self.lines.append("extern print_string")
+        self.lines.append("extern read_int")
 
         for function in program.functions:
             self._gen_function(function)
 
         return "\n".join(self.lines)
 
+    def _emit_global_sections(self, program: IRProgram) -> None:
+        globals_ = getattr(program, "global_variables", [])
+
+        initialized = [
+            var for var in globals_
+            if getattr(var, "initializer", None) is not None
+        ]
+
+        uninitialized = [
+            var for var in globals_
+            if getattr(var, "initializer", None) is None
+        ]
+
+        if initialized:
+            self.lines.append("section .data")
+            for var in initialized:
+                self.lines.append(f"global {var.name}")
+                self.lines.append(f"{var.name}: dq {var.initializer}")
+            self.lines.append("")
+
+        if uninitialized:
+            self.lines.append("section .bss")
+            for var in uninitialized:
+                self.lines.append(f"global {var.name}")
+                self.lines.append(f"{var.name}: resq 1")
+            self.lines.append("")
+
     def _gen_function(self, function: IRFunction) -> None:
         self.current_function = function
         self.stack_frame = StackFrame()
+
+        if self.use_register_allocation:
+            allocator = LinearScanRegisterAllocator()
+            self.register_allocation = allocator.allocate(function)
+            self.used_allocated_registers = {
+                location
+                for location in self.register_allocation.values()
+                if not location.startswith("spill")
+            }
+        else:
+            self.register_allocation = {}
+            self.used_allocated_registers = set()
 
         self._reserve_function_storage(function)
 
@@ -54,7 +113,10 @@ class X86Generator:
         for block in function.blocks:
             for instr in block.instructions:
                 if instr.dest is not None and instr.dest.kind == IROperandKind.TEMP:
-                    self.stack_frame.allocate_local(instr.dest.value, 8)
+                    self.stack_frame.allocate_local(
+                        instr.dest.value,
+                        self._type_size(instr.dest.type_name),
+                    )
 
                 for arg in instr.args:
                     if arg.kind == IROperandKind.TEMP:
@@ -74,9 +136,97 @@ class X86Generator:
         self.lines.append("    ret")
 
     def _var_addr(self, name: str) -> str:
+        if name in self.global_variable_names:
+            return f"[rel {name}]"
+
         return self.stack_frame.get_address(name)
 
+    def _type_size(self, type_name: str | None) -> int:
+        if type_name == "bool":
+            return 1
+        if type_name == "int":
+            return 4
+        return 8
+
+    def _mem_prefix(self, type_name: str | None) -> str:
+        if type_name == "int":
+            return "dword"
+        if type_name == "bool":
+            return "byte"
+        return "qword"
+
+    def _reg_for_type(self, reg: str, type_name: str | None) -> str:
+        if type_name == "bool":
+            reg8 = {
+                "rax": "al",
+                "rbx": "bl",
+                "rcx": "cl",
+                "rdx": "dl",
+                "rsi": "sil",
+                "rdi": "dil",
+                "r8": "r8b",
+                "r9": "r9b",
+                "r10": "r10b",
+                "r11": "r11b",
+                "r12": "r12b",
+                "r13": "r13b",
+            }
+            return reg8.get(reg, reg)
+
+        if type_name == "int":
+            reg32 = {
+                "rax": "eax",
+                "rbx": "ebx",
+                "rcx": "ecx",
+                "rdx": "edx",
+                "rsi": "esi",
+                "rdi": "edi",
+                "r8": "r8d",
+                "r9": "r9d",
+                "r10": "r10d",
+                "r11": "r11d",
+                "r12": "r12d",
+                "r13": "r13d",
+            }
+            return reg32.get(reg, reg)
+
+        return reg
+
+    def _acc_reg(self, type_name: str | None) -> str:
+        if type_name == "int":
+            return "eax"
+        if type_name == "bool":
+            return "al"
+        return "rax"
+
+
+    def _var_location(self, name: str, type_name: str | None = None) -> str:
+        return f"{self._mem_prefix(type_name)} {self._var_addr(name)}"
+
+
+    def _full_acc_reg(self, type_name: str | None) -> str:
+        if type_name in {"int", "bool"}:
+            return "eax"
+        return "rax"
+
     def _gen_instruction(self, instr) -> None:
+        if instr.opcode == IROpcode.PHI:
+            self.skip_next_phi_store = True
+            self.lines.append(f"    ; phi skipped: {instr.to_text()}")
+            return
+
+        if (
+            self.skip_next_phi_store
+            and instr.opcode == IROpcode.STORE
+            and len(instr.args) >= 2
+            and instr.args[1].kind == IROperandKind.TEMP
+        ):
+            self.skip_next_phi_store = False
+            self.lines.append(f"    ; phi store skipped: {instr.to_text()}")
+            return
+
+        self.skip_next_phi_store = False
+
         if instr.opcode == IROpcode.ALLOCA:
             # ALLOCA уже отражён в stack_frame, отдельный asm не нужен
             self.lines.append(f"    ; {instr.to_text()}")
@@ -152,15 +302,14 @@ class X86Generator:
         # STORE variable, literal
         if target.kind == IROperandKind.VARIABLE and value.kind == IROperandKind.LITERAL:
             addr = self._var_addr(target.value)
-            self.lines.append(f"    mov qword {addr}, {value.value}")
+            self.lines.append(f"    mov {self._var_location(target.value, target.type_name)}, {value.value}")
             return
 
         # STORE variable, temp
         if target.kind == IROperandKind.VARIABLE and value.kind == IROperandKind.TEMP:
-            addr = self._var_addr(target.value)
-            temp_slot = self._temp_addr(value.value)
-            self.lines.append(f"    mov rax, qword {temp_slot}")
-            self.lines.append(f"    mov qword {addr}, rax")
+            acc = self._acc_reg(value.type_name)
+            self.lines.append(f"    mov {acc}, {self._temp_location(value.value, value.type_name)}")
+            self.lines.append(f"    mov {self._var_location(target.value, target.type_name)}, {acc}")
             return
 
         self.lines.append(f"    ; unsupported STORE: {instr.to_text()}")
@@ -169,12 +318,10 @@ class X86Generator:
         source = instr.args[0]
         dest = instr.dest
 
-        # LOAD temp, variable
         if source.kind == IROperandKind.VARIABLE and dest.kind == IROperandKind.TEMP:
-            src_addr = self._var_addr(source.value)
-            dest_addr = self._temp_addr(dest.value)
-            self.lines.append(f"    mov rax, qword {src_addr}")
-            self.lines.append(f"    mov qword {dest_addr}, rax")
+            acc = self._acc_reg(dest.type_name)
+            self.lines.append(f"    mov {acc}, {self._var_location(source.value, source.type_name)}")
+            self.lines.append(f"    mov {self._temp_location(dest.value, dest.type_name)}, {acc}")
             return
 
         self.lines.append(f"    ; unsupported LOAD: {instr.to_text()}")
@@ -192,14 +339,14 @@ class X86Generator:
             return
 
         if value.kind == IROperandKind.TEMP:
-            temp_addr = self._temp_addr(value.value)
-            self.lines.append(f"    mov rax, qword {temp_addr}")
+            acc = self._acc_reg(value.type_name)
+            self.lines.append(f"    mov {acc}, {self._temp_location(value.value, value.type_name)}")
             self._emit_epilogue()
             return
 
         if value.kind == IROperandKind.VARIABLE:
-            addr = self._var_addr(value.value)
-            self.lines.append(f"    mov rax, qword {addr}")
+            acc = self._acc_reg(value.type_name)
+            self.lines.append(f"    mov {acc}, {self._var_location(value.value, value.type_name)}")
             self._emit_epilogue()
             return
 
@@ -215,68 +362,83 @@ class X86Generator:
             self.stack_frame.allocate_local(temp_name, 8)
         return self.stack_frame.get_address(temp_name)
 
+    def _temp_location(self, temp_name: str, type_name: str | None = None) -> str:
+        if self.use_register_allocation:
+            location = self.register_allocation.get(str(temp_name))
+
+            if location is not None and not location.startswith("spill"):
+                return self._reg_for_type(location, type_name)
+
+        return f"{self._mem_prefix(type_name)} {self._temp_addr(temp_name)}"
+
     def _gen_binary_arithmetic(self, instr) -> None:
         left = instr.args[0]
         right = instr.args[1]
         dest = instr.dest
+        type_name = dest.type_name
 
-        # left -> rax
+        acc = self._acc_reg(type_name)
+        full_acc = "rax"
+
         if left.kind == IROperandKind.LITERAL:
-            self.lines.append(f"    mov rax, {left.value}")
+            self.lines.append(f"    mov {acc}, {left.value}")
         elif left.kind == IROperandKind.TEMP:
-            self.lines.append(f"    mov rax, qword {self._temp_addr(left.value)}")
+            self.lines.append(f"    mov {acc}, {self._temp_location(left.value, left.type_name)}")
         elif left.kind == IROperandKind.VARIABLE:
-            self.lines.append(f"    mov rax, qword {self._var_addr(left.value)}")
+            self.lines.append(f"    mov {acc}, {self._var_location(left.value, left.type_name)}")
         else:
-            self.lines.append(f"    ; unsupported left operand")
+            self.lines.append("    ; unsupported left operand")
             return
 
-        # operation with right
         if right.kind == IROperandKind.LITERAL:
             rhs = str(right.value)
         elif right.kind == IROperandKind.TEMP:
-            rhs = f"qword {self._temp_addr(right.value)}"
+            rhs = self._temp_location(right.value, right.type_name)
         elif right.kind == IROperandKind.VARIABLE:
-            rhs = f"qword {self._var_addr(right.value)}"
+            rhs = self._var_location(right.value, right.type_name)
         else:
-            self.lines.append(f"    ; unsupported right operand")
+            self.lines.append("    ; unsupported right operand")
             return
 
         if instr.opcode == IROpcode.ADD:
-            self.lines.append(f"    add rax, {rhs}")
+            self.lines.append(f"    add {acc}, {rhs}")
 
         elif instr.opcode == IROpcode.SUB:
-            self.lines.append(f"    sub rax, {rhs}")
+            self.lines.append(f"    sub {acc}, {rhs}")
 
         elif instr.opcode == IROpcode.MUL:
-            self.lines.append(f"    imul rax, {rhs}")
+            self.lines.append(f"    imul {acc}, {rhs}")
 
         elif instr.opcode == IROpcode.DIV:
-            self.lines.append("    cqo")
-            self.lines.append(f"    idiv {rhs}")
+            self._move_operand_to_register(right, "r10")
+            if type_name == "int":
+                self.lines.append("    cdq")
+                self.lines.append("    idiv r10d")
+            else:
+                self.lines.append("    cqo")
+                self.lines.append("    idiv r10")
 
         elif instr.opcode == IROpcode.MOD:
-            self.lines.append("    cqo")
-            self.lines.append(f"    idiv {rhs}")
-            self.lines.append("    mov rax, rdx")
-
+            self._move_operand_to_register(right, "r10")
+            if type_name == "int":
+                self.lines.append("    cdq")
+                self.lines.append("    idiv r10d")
+                self.lines.append("    mov eax, edx")
+            else:
+                self.lines.append("    cqo")
+                self.lines.append("    idiv r10")
+                self.lines.append("    mov rax, rdx")
 
         elif instr.opcode == IROpcode.AND:
-            self.lines.append(f"    and rax, {rhs}")
+            self.lines.append(f"    and {acc}, {rhs}")
 
         elif instr.opcode == IROpcode.OR:
-            self.lines.append(f"    or rax, {rhs}")
+            self.lines.append(f"    or {acc}, {rhs}")
 
         elif instr.opcode == IROpcode.XOR:
-            self.lines.append(f"    xor rax, {rhs}")
+            self.lines.append(f"    xor {acc}, {rhs}")
 
-        if instr.opcode == IROpcode.NOT:
-            self.lines.append(f"    not rax")
-
-        # save result temp
-        dest_addr = self._temp_addr(dest.value)
-        self.lines.append(f"    mov qword {dest_addr}, rax")
-
+        self.lines.append(f"    mov {self._temp_location(dest.value, type_name)}, {acc}")
 
     def _gen_not(self, instr) -> None:
         operand = instr.args[0]
@@ -288,8 +450,7 @@ class X86Generator:
         self.lines.append("    mov rax, 0")
         self.lines.append("    sete al")
 
-        dest_addr = self._temp_addr(dest.value)
-        self.lines.append(f"    mov qword {dest_addr}, rax")
+        self.lines.append(f"    mov {self._temp_location(dest.value, dest.type_name)}, al")
 
     def _load_operand_to_rax(self, operand) -> None:
         if operand.kind == IROperandKind.LITERAL:
@@ -297,25 +458,26 @@ class X86Generator:
             return
 
         if operand.kind == IROperandKind.TEMP:
-            self.lines.append(f"    mov rax, qword {self._temp_addr(operand.value)}")
+            acc = self._acc_reg(operand.type_name)
+            self.lines.append(f"    mov {acc}, {self._temp_location(operand.value, operand.type_name)}")
             return
 
         if operand.kind == IROperandKind.VARIABLE:
-            self.lines.append(f"    mov rax, qword {self._var_addr(operand.value)}")
+            acc = self._acc_reg(operand.type_name)
+            self.lines.append(f"    mov {acc}, {self._var_location(operand.value, operand.type_name)}")
             return
 
         self.lines.append(f"    ; unsupported operand load to rax: {operand}")
-
 
     def _rhs_operand_text(self, operand) -> str:
         if operand.kind == IROperandKind.LITERAL:
             return str(operand.value)
 
         if operand.kind == IROperandKind.TEMP:
-            return f"qword {self._temp_addr(operand.value)}"
+            return self._temp_location(operand.value, operand.type_name)
 
         if operand.kind == IROperandKind.VARIABLE:
-            return f"qword {self._var_addr(operand.value)}"
+            return self._var_location(operand.value, operand.type_name)
 
         return "0"
 
@@ -324,10 +486,34 @@ class X86Generator:
         right = instr.args[1]
         dest = instr.dest
 
-        self._load_operand_to_rax(left)
-        rhs = self._rhs_operand_text(right)
+        if left.kind == IROperandKind.LITERAL:
+            left_reg = "eax" if left.type_name == "int" else "rax"
+            self.lines.append(f"    mov {left_reg}, {left.value}")
+        elif left.kind == IROperandKind.TEMP:
+            left_reg = self._acc_reg(left.type_name)
+            self.lines.append(
+                f"    mov {left_reg}, {self._temp_location(left.value, left.type_name)}"
+            )
+        elif left.kind == IROperandKind.VARIABLE:
+            left_reg = self._acc_reg(left.type_name)
+            self.lines.append(
+                f"    mov {left_reg}, {self._var_location(left.value, left.type_name)}"
+            )
+        else:
+            self.lines.append(f"    ; unsupported compare left operand: {left}")
+            return
 
-        self.lines.append(f"    cmp rax, {rhs}")
+        if right.kind == IROperandKind.LITERAL:
+            rhs = str(right.value)
+        elif right.kind == IROperandKind.TEMP:
+            rhs = self._temp_location(right.value, right.type_name)
+        elif right.kind == IROperandKind.VARIABLE:
+            rhs = self._var_location(right.value, right.type_name)
+        else:
+            self.lines.append(f"    ; unsupported compare right operand: {right}")
+            return
+
+        self.lines.append(f"    cmp {left_reg}, {rhs}")
 
         set_map = {
             IROpcode.CMP_EQ: "sete",
@@ -340,12 +526,9 @@ class X86Generator:
 
         set_instr = set_map[instr.opcode]
 
-        # al = 0/1
         self.lines.append("    mov rax, 0")
         self.lines.append(f"    {set_instr} al")
-
-        dest_addr = self._temp_addr(dest.value)
-        self.lines.append(f"    mov qword {dest_addr}, rax")
+        self.lines.append(f"    mov {self._temp_location(dest.value, dest.type_name)}, al")
 
     def _gen_jump(self, instr) -> None:
         target = instr.args[0]
@@ -356,16 +539,23 @@ class X86Generator:
         target = instr.args[1]
 
         if cond.kind == IROperandKind.TEMP:
-            self.lines.append(f"    mov rax, qword {self._temp_addr(cond.value)}")
+            reg = self._acc_reg(cond.type_name)
+            self.lines.append(
+                f"    mov {reg}, {self._temp_location(cond.value, cond.type_name)}"
+            )
         elif cond.kind == IROperandKind.VARIABLE:
-            self.lines.append(f"    mov rax, qword {self._var_addr(cond.value)}")
+            reg = self._acc_reg(cond.type_name)
+            self.lines.append(
+                f"    mov {reg}, {self._var_location(cond.value, cond.type_name)}"
+            )
         elif cond.kind == IROperandKind.LITERAL:
-            self.lines.append(f"    mov rax, {cond.value}")
+            reg = "rax"
+            self.lines.append(f"    mov {reg}, {cond.value}")
         else:
             self.lines.append(f"    ; unsupported JUMP_IF_NOT condition: {cond}")
             return
 
-        self.lines.append("    cmp rax, 0")
+        self.lines.append(f"    cmp {reg}, 0")
         self.lines.append(f"    je {self._block_label(target.value)}")
 
     def _gen_jump_if(self, instr) -> None:
@@ -373,28 +563,38 @@ class X86Generator:
         target = instr.args[1]
 
         if cond.kind == IROperandKind.TEMP:
-            self.lines.append(f"    mov rax, qword {self._temp_addr(cond.value)}")
+            reg = self._acc_reg(cond.type_name)
+            self.lines.append(
+                f"    mov {reg}, {self._temp_location(cond.value, cond.type_name)}"
+            )
         elif cond.kind == IROperandKind.VARIABLE:
-            self.lines.append(f"    mov rax, qword {self._var_addr(cond.value)}")
+            reg = self._acc_reg(cond.type_name)
+            self.lines.append(
+                f"    mov {reg}, {self._var_location(cond.value, cond.type_name)}"
+            )
         elif cond.kind == IROperandKind.LITERAL:
-            self.lines.append(f"    mov rax, {cond.value}")
+            reg = "rax"
+            self.lines.append(f"    mov {reg}, {cond.value}")
         else:
             self.lines.append(f"    ; unsupported JUMP_IF condition: {cond}")
             return
 
-        self.lines.append("    cmp rax, 0")
+        self.lines.append(f"    cmp {reg}, 0")
         self.lines.append(f"    jne {self._block_label(target.value)}")
-
 
     def _move_params_to_stack(self, function: IRFunction) -> None:
         for i, param_name in enumerate(function.params):
-            if i >= len(INT_ARG_REGISTERS):
-                self.lines.append(f"    ; unsupported stack-passed param: {param_name}")
-                continue
-
-            reg = INT_ARG_REGISTERS[i]
             addr = self._var_addr(param_name)
-            self.lines.append(f"    mov qword {addr}, {reg}")
+
+            if i < len(INT_ARG_REGISTERS):
+                reg = INT_ARG_REGISTERS[i]
+                self.lines.append(f"    mov qword {addr}, {reg}")
+            else:
+                stack_arg_addr = self.stack_frame.get_stack_param_address(
+                    i - len(INT_ARG_REGISTERS)
+                )
+                self.lines.append(f"    mov rax, qword {stack_arg_addr}")
+                self.lines.append(f"    mov qword {addr}, rax")
 
 
     def _gen_param(self, instr) -> None:
@@ -409,11 +609,13 @@ class X86Generator:
             return
 
         if operand.kind == IROperandKind.TEMP:
-            self.lines.append(f"    mov {reg}, qword {self._temp_addr(operand.value)}")
+            typed_reg = self._reg_for_type(reg, operand.type_name)
+            self.lines.append(f"    mov {typed_reg}, {self._temp_location(operand.value, operand.type_name)}")
             return
 
         if operand.kind == IROperandKind.VARIABLE:
-            self.lines.append(f"    mov {reg}, qword {self._var_addr(operand.value)}")
+            typed_reg = self._reg_for_type(reg, operand.type_name)
+            self.lines.append(f"    mov {typed_reg}, {self._var_location(operand.value, operand.type_name)}")
             return
 
         self.lines.append(f"    ; unsupported operand move to {reg}: {operand}")
@@ -426,10 +628,19 @@ class X86Generator:
         func_operand = instr.args[0]
         func_name = func_operand.value
 
-        # Разложить pending params по ABI-регистрам
+        stack_arg_indices = [
+            index
+            for index in sorted(self.pending_params.keys(), reverse=True)
+            if index >= len(INT_ARG_REGISTERS)
+        ]
+
+        for index in stack_arg_indices:
+            operand = self.pending_params[index]
+            self._move_operand_to_register(operand, "rax")
+            self.lines.append("    push rax")
+
         for index in sorted(self.pending_params.keys()):
             if index >= len(INT_ARG_REGISTERS):
-                self.lines.append(f"    ; unsupported stack argument #{index}")
                 continue
 
             reg = INT_ARG_REGISTERS[index]
@@ -438,9 +649,15 @@ class X86Generator:
 
         self.lines.append(f"    call {func_name}")
 
+        stack_arg_count = len(stack_arg_indices)
+        if stack_arg_count > 0:
+            self.lines.append(f"    add rsp, {stack_arg_count * 8}")
+
         if instr.dest is not None and instr.dest.kind == IROperandKind.TEMP:
-            dest_addr = self._temp_addr(instr.dest.value)
-            self.lines.append(f"    mov qword {dest_addr}, rax")
+            self.lines.append(
+                f"    mov {self._temp_location(instr.dest.value, instr.dest.type_name)}, "
+                f"{self._acc_reg(instr.dest.type_name)}"
+            )
 
         self.pending_params.clear()
 

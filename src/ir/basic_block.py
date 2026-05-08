@@ -134,13 +134,24 @@ class IRFunction:
 
 
 @dataclass
+class IRGlobalVariable:
+    name: str
+    type_name: str
+    initializer: Optional[object] = None
+
+
+@dataclass
 class IRProgram:
     functions: List[IRFunction] = field(default_factory=list)
+    global_variables: List[IRGlobalVariable] = field(default_factory=list)
 
     def add_function(self, function: IRFunction) -> None:
         if self.get_function(function.name) is not None:
             raise ValueError(f"Function '{function.name}' already exists in IR program")
         self.functions.append(function)
+
+    def add_global_variable(self, variable: IRGlobalVariable) -> None:
+        self.global_variables.append(variable)
 
     def get_function(self, name: str) -> Optional[IRFunction]:
         for function in self.functions:
@@ -149,12 +160,34 @@ class IRProgram:
         return None
 
     def to_text(self) -> str:
-        if not self.functions:
+        parts = []
+
+        if self.global_variables:
+            parts.append("# Globals:")
+            for var in self.global_variables:
+                if var.initializer is None:
+                    parts.append(f"global {var.type_name} {var.name}")
+                else:
+                    parts.append(f"global {var.type_name} {var.name} = {var.initializer}")
+
+        if self.functions:
+            parts.append("\n\n".join(function.to_text() for function in self.functions))
+
+        if not parts:
             return "# Empty IR program"
-        return "\n\n".join(function.to_text() for function in self.functions)
+
+        return "\n\n".join(parts)
 
     def to_json(self) -> dict:
         return {
+            "globals": [
+                {
+                    "name": var.name,
+                    "type_name": var.type_name,
+                    "initializer": var.initializer,
+                }
+                for var in self.global_variables
+            ],
             "functions": [function.to_json() for function in self.functions],
         }
 
@@ -170,6 +203,7 @@ class IRProgram:
                 instruction_count += len(block.instructions)
 
         return {
+            "globals": len(self.global_variables),
             "functions": len(self.functions),
             "basic_blocks": block_count,
             "instructions": instruction_count,

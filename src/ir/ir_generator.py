@@ -5,8 +5,7 @@ from typing import Optional
 from src.parser.ast import *
 from src.semantic.symbol_table import SymbolTable
 from src.ir.ir_instructions import IROpcode, IROperand, IROperandKind, IRInstruction
-from src.ir.basic_block import BasicBlock, IRFunction, IRProgram
-
+from src.ir.basic_block import BasicBlock, IRFunction, IRProgram, IRGlobalVariable
 
 class IRGenerator:
     def __init__(self, symbol_table: SymbolTable, type_system=None):
@@ -18,8 +17,11 @@ class IRGenerator:
 
     def generate(self, ast: ProgramNode) -> IRProgram:
         for decl in ast.declarations:
-            if isinstance(decl, FunctionDeclNode):
+            if isinstance(decl, VarDeclStmtNode):
+                self._generate_global_variable(decl)
+            elif isinstance(decl, FunctionDeclNode):
                 self._generate_function(decl)
+
         return self.program
 
     def get_function_ir(self, name: str) -> Optional[IRFunction]:
@@ -30,6 +32,20 @@ class IRGenerator:
 
     def get_all_ir(self) -> IRProgram:
         return self.program
+
+    def _generate_global_variable(self, node: VarDeclStmtNode) -> None:
+        initializer = None
+
+        if node.initializer is not None and isinstance(node.initializer, LiteralExprNode):
+            initializer = node.initializer.value
+
+        global_var = IRGlobalVariable(
+            name=node.name.lexeme,
+            type_name=node.type.lexeme,
+            initializer=initializer,
+        )
+
+        self.program.add_global_variable(global_var)
 
     def _generate_function(self, node: FunctionDeclNode) -> None:
         ret_type = node.return_type.lexeme if node.return_type else "void"

@@ -31,3 +31,7 @@ class StackFrame:
         if size % 16 != 0:
             size += 16 - (size % 16)
         return size
+
+    def get_stack_param_address(self, index_after_six: int) -> str:
+        offset = 16 + index_after_six * 8
+        return f"[rbp+{offset}]"

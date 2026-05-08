@@ -34,10 +34,10 @@ class SemanticAnalyzer(ASTVisitor):
 
         self.decorated_ast = None
 
-
     def analyze(self, ast: ProgramNode) -> ProgramNode:
         self.decorated_ast = ast
 
+        self._declare_builtin_functions()
         self._collect_global_declarations(ast)
 
         for decl in ast.declarations:
@@ -55,6 +55,43 @@ class SemanticAnalyzer(ASTVisitor):
     def get_decorated_ast(self):
         return self.decorated_ast
 
+    def _declare_builtin_functions(self) -> None:
+        builtin_functions = [
+            ("print_int", VOID_TYPE, [INT_TYPE]),
+        ]
+
+        for func_name, return_type, param_types in builtin_functions:
+            if self.symbol_table.lookup_local(func_name) is not None:
+                continue
+
+            param_symbols = []
+
+            for i, param_type in enumerate(param_types):
+                param_symbols.append(
+                    SymbolInfo(
+                        name=f"arg{i}",
+                        type=param_type,
+                        kind=SymbolKind.PARAMETER,
+                        line=0,
+                        column=0,
+                        initialized=True,
+                    )
+                )
+
+            function_type = make_function_type(param_types, return_type)
+
+            symbol = SymbolInfo(
+                name=func_name,
+                type=function_type,
+                kind=SymbolKind.FUNCTION,
+                line=0,
+                column=0,
+                return_type=return_type,
+                params=param_symbols,
+                initialized=True,
+            )
+
+            self.symbol_table.insert(func_name, symbol)
 
 
     def _collect_global_declarations(self, ast: ProgramNode) -> None:

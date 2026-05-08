@@ -456,7 +456,9 @@ def run_compile(args):
         sys.exit(1)
 
     ir_program = IRGenerator(analyzer.get_symbol_table()).generate(ast)
-    asm = X86Generator().generate(ir_program)
+    asm = X86Generator(
+        use_register_allocation=getattr(args, "use_register_allocation", False)
+    ).generate(ir_program)
 
     if args.output:
         Path(args.output).write_text(asm, encoding="utf-8")
@@ -469,7 +471,7 @@ def run_info():
     print("MiniCompiler")
     print(f"Version: {VERSION}")
     print("Language: Simplified C-like")
-    print("Sprint: 4 (Semantic Analysis + Intermediate Representation + CFG + Validation)")
+    print("Sprint: 5")
 
 
 def run_spec():
@@ -556,9 +558,24 @@ def main():
     ir.add_argument("--validate", action="store_true", help="Validate generated IR")
 
     # compile
-    compile_cmd = sub.add_parser("compile", help="Compile source to x86-64 assembly")
+    compile_cmd = sub.add_parser(
+        "compile",
+        help="Compile source to x86-64 assembly"
+    )
+
     compile_cmd.add_argument("--input", required=True)
-    compile_cmd.add_argument("--output", help="Output assembly file (default: stdout)")
+
+    compile_cmd.add_argument(
+        "--output",
+        help="Output assembly file (default: stdout)"
+    )
+
+    compile_cmd.add_argument(
+        "--use-register-allocation",
+        action="store_true",
+        help="Enable experimental linear scan register allocation"
+    )
+
     compile_cmd.set_defaults(func=run_compile)
 
     # info
