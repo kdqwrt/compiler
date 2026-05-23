@@ -63,8 +63,18 @@ def test_codegen_div_mod_and_or_not_instructions():
     assert "idiv r10" in mod_asm
     assert "mov eax, edx" in mod_asm
 
-    assert "and al," in and_asm
-    assert "or al," in or_asm
+    assert "and al," not in and_asm
+    assert ".main_and_rhs" in and_asm
+    assert ".main_and_false" in and_asm
+    assert ".main_and_true" in and_asm
+    assert ".main_and_end" in and_asm
+    assert "&&" not in and_asm or "short-circuit" in and_asm
+
+    assert "or al," not in or_asm
+    assert ".main_or_rhs" in or_asm
+    assert ".main_or_false" in or_asm
+    assert ".main_or_true" in or_asm
+    assert ".main_or_end" in or_asm
 
     assert "cmp rax, 0" in not_asm
     assert "sete al" in not_asm

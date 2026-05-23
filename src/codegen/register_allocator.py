@@ -18,8 +18,6 @@ class RegisterAllocator:
 AVAILABLE_REGISTERS = [
     "r10",
     "r11",
-    "r12",
-    "r13",
 ]
 
 

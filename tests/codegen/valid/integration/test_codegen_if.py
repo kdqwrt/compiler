@@ -37,10 +37,15 @@ def test_codegen_if_else():
 
     asm = generate_asm(source)
 
-    assert "cmp rax, 2" in asm or "cmp rax, qword" in asm
-    assert "setl al" in asm
-    assert "je .main_else" in asm or "je .main_else3" in asm
-    assert "jmp .main_then" in asm or "jmp .main_then1" in asm
+    assert "cmp eax, 2" in asm or "cmp eax, dword" in asm
+    assert "jge .main_else" in asm or "jl .main_then" in asm
+    assert (
+            "jge .main_else" in asm
+            or "jge .main_else3" in asm
+            or "jl .main_then" in asm
+    )
+    assert ".main_then" in asm
+    assert ".main_else" in asm
     assert ".main_then" in asm or ".main_then1" in asm
     assert ".main_else" in asm or ".main_else3" in asm
     assert "ret" in asm

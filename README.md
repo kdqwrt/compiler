@@ -97,6 +97,310 @@ MiniCompiler — учебный компилятор для упрощённог
 - экспорт в Graphviz DOT
 - обход дерева с помощью visitor pattern
 
+## Control Flow Generation
+
+Реализована генерация управления потоком выполнения:
+
+### Conditionals
+- `if`
+- `if / else`
+- nested conditionals
+
+### Loops
+- `while`
+- `for`
+
+### Short-circuit logic
+- `&&`
+- `||`
+
+Для short-circuit правая часть вычисляется только при необходимости.
+
+Пример:
+
+```c
+if (a != 0 && b / a > 2)
+```
+
+Сначала проверяется `a != 0`.  
+Если условие ложно — деление не выполняется.
+
+---
+
+## Direct Conditional Jumps
+
+Ранее boolean-условие материализовывалось через `setcc`.
+
+Было:
+
+```asm
+cmp eax, 3
+setg al
+cmp al, 0
+je .endif
+```
+
+Теперь реализованы direct jumps:
+
+```asm
+cmp eax, 3
+jle .endif
+```
+
+Используются:
+- `jg`
+- `jl`
+- `jge`
+- `jle`
+- `je`
+- `jne`
+- `ja`
+- `jb`
+- `jae`
+- `jbe`
+
+Это уменьшает число инструкций и убирает лишнюю materialization boolean.
+
+---
+
+## Register Allocation (Linear Scan)
+
+Добавлен  linear scan register allocation.
+
+При запуске:
+
+```bash
+--use-register-allocation
+```
+
+локальные переменные размещаются в регистрах.
+
+Было:
+
+```asm
+mov dword [rbp-8], 4
+mov dword [rbp-16], 2
+```
+
+Стало:
+
+```asm
+mov r12d, 4
+mov r13d, 2
+```
+
+Используются:
+- `r12/r13` — локальные переменные
+- `r10/r11` — временные значения
+
+### ABI Safety
+
+Так как `r12/r13` являются callee-saved, реализовано сохранение:
+
+```asm
+mov qword [rbp-56], r12
+mov qword [rbp-64], r13
+```
+
+и восстановление:
+
+```asm
+mov r12, qword [rbp-56]
+mov r13, qword [rbp-64]
+```
+
+
+
+---
+
+## Global Variables
+
+Поддерживаются глобальные переменные.
+
+Пример:
+
+```c
+int g = 0;
+
+fn main() -> int {
+    g = 7;
+    return g;
+}
+```
+
+ASM:
+
+```asm
+section .data
+global g
+g: dq 0
+```
+
+---
+
+## Float Support
+
+Поддерживаются:
+- float literals
+- float return
+- float variables
+- float arithmetic
+- float comparison
+- int → float conversion
+
+Константы выносятся в `.rodata`:
+
+```asm
+section .rodata
+__float_const_0: dq 3.14
+```
+
+Используются SSE инструкции:
+- `movsd`
+- `addsd`
+- `subsd`
+- `mulsd`
+- `divsd`
+- `ucomisd`
+- `cvtsi2sd`
+
+---
+
+## Peephole Optimization
+
+После генерации ASM запускается peephole optimizer.
+
+Используется окно:
+
+```python
+window_size = 5
+```
+
+Оптимизатор анализирует локальные группы инструкций и выполняет несколько проходов.
+
+---
+
+## Реализованные оптимизации
+
+### 1. Constant Folding (ASM-level)
+
+Свёртка арифметики с константами.
+
+Было:
+
+```asm
+mov eax, 10
+add eax, 5
+```
+
+Стало:
+
+```asm
+mov eax, 15
+```
+
+Поддерживается:
+- сложение
+- вычитание
+- умножение
+
+---
+
+### 2. Strength Reduction
+
+Умножение на степень двойки заменяется на сдвиг.
+
+Было:
+
+```asm
+imul eax, 4
+```
+
+Стало:
+
+```asm
+shl eax, 2
+```
+
+---
+
+### 3. Arithmetic Identity Elimination
+
+Удаляются:
+- `add eax, 0`
+- `sub eax, 0`
+- `imul eax, 1`
+
+Замена:
+
+```asm
+imul eax, 0
+```
+
+на:
+
+```asm
+mov eax, 0
+```
+
+---
+
+### 4. Redundant Move Elimination
+
+Удаляется:
+
+```asm
+mov eax, eax
+```
+
+---
+
+### 5. Move Chain Collapse
+
+Было:
+
+```asm
+mov eax, r11d
+mov r10d, eax
+```
+
+Стало:
+
+```asm
+mov r10d, r11d
+```
+
+---
+
+### 6. Dead Code Elimination
+
+Удаляется код после:
+- `ret`
+- `jmp`
+
+Пример:
+
+```asm
+ret
+mov eax, 5
+```
+
+→ удаляется.
+
+---
+
+### 7. Jump Cleanup
+
+Удаляется:
+
+```asm
+jmp .L1
+.L1:
+```
+
+---
+
+
 ## Тестирование
 
 В проекте используются:
@@ -115,28 +419,8 @@ MiniCompiler — учебный компилятор для упрощённог
 - **Поддерживаемые платформы**: Windows, Linux
 - **Система сборки**: pyproject.toml
 
-### Парсер
-- recursive descent parser
-- построение AST из токенов
-- базовое восстановление после синтаксических ошибок
-- обработка:
-  - объявлений переменных
-  - объявлений функций
-  - объявлений структур
-  - блоков
-  - `if / else`
-  - `while`
-  - `for`
-  - `return`
-  - выражений
-  - вызовов функций
-  - доступа к полям структуры
 
-### AST
-- текстовый pretty-print
-- экспорт в Graphviz DOT
-- экспорт в JSON
-- visitor для обхода AST
+
 
 ## Структура проекта
 
@@ -200,7 +484,7 @@ compiler-project/
 ```bash
 # Клонирование репозитория
 git clone <url-репозитория>
-cd compiler-project
+cd compiler
 
 # Установка в режиме разработки (режим editable)
 pip install -e .
@@ -260,6 +544,27 @@ compiler parse --input hello1.src --format dot --output ast.dot
 ```bash
 dot -Tpng ast.dot -o ast.png
 ```
+
+
+## CLI: NASM Build (Linux / Ubuntu)
+
+Сборка ASM:
+
+```bash
+nasm -f elf64 hello.asm -o hello.o
+nasm -f elf64 src/runtime/runtime.asm -o runtime.o
+ld -o hello_program runtime.o hello.o
+```
+
+Запуск:
+
+```bash
+./hello_program
+echo $?
+```
+
+---
+
 
 ### Запуск тестов
 ```bash

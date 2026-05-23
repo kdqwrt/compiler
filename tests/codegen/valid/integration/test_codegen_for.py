@@ -38,7 +38,7 @@ def test_codegen_for_loop():
     assert ".main_for_cond" in asm
     assert ".main_for_body" in asm
     assert ".main_for_exit" in asm
-    assert "cmp rax," in asm
-    assert "je .main_for_exit" in asm or "jne .main_for_body" in asm
+    assert "cmp eax," in asm
+    assert "jge .main_for_exit" in asm or "jl .main_for_body" in asm
     assert "jmp .main_for_cond" in asm
     assert "ret" in asm

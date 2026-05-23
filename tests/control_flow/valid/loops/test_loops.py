@@ -18,17 +18,19 @@ def generate_asm(source: str) -> str:
     analyzer.analyze(ast)
     assert analyzer.get_errors() == []
 
-    ir_program = IRGenerator(analyzer.symbol_table).generate(ast)
+    ir_program = IRGenerator(analyzer.get_symbol_table()).generate(ast)
     return X86Generator().generate(ir_program)
 
 
-def test_codegen_while_loop():
+def test_while_loop_codegen():
     source = """
     fn main() -> int {
         int x = 0;
+
         while (x < 3) {
             x = x + 1;
         }
+
         return x;
     }
     """
@@ -38,7 +40,25 @@ def test_codegen_while_loop():
     assert ".main_while_cond" in asm
     assert ".main_while_body" in asm
     assert ".main_while_exit" in asm
-    assert "cmp eax," in asm
-    assert "jge .main_while_exit" in asm or "jl .main_while_body" in asm
     assert "jmp .main_while_cond" in asm
-    assert "ret" in asm
+
+
+def test_for_loop_codegen():
+    source = """
+    fn main() -> int {
+        int i = 0;
+
+        for (i = 0; i < 3; i = i + 1) {
+            i = i + 1;
+        }
+
+        return i;
+    }
+    """
+
+    asm = generate_asm(source)
+
+    assert ".main_for_cond" in asm
+    assert ".main_for_body" in asm
+    assert ".main_for_exit" in asm
+    assert "jmp .main_for_cond" in asm

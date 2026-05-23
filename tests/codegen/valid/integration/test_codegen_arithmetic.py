@@ -28,6 +28,5 @@ def test_codegen_add_expression():
 
     asm = generate_asm(source)
 
-    assert "mov eax, 2" in asm
-    assert "add eax, 3" in asm
+    assert "mov eax, 5" in asm
     assert "ret" in asm

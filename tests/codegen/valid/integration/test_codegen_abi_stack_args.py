@@ -91,3 +91,23 @@ def test_function_call_with_seven_integer_arguments(tmp_path: Path):
     assert "add rsp, 8" in asm
     assert "qword [rbp+16]" in asm
     assert result.returncode == 28
+
+
+def test_function_call_with_eight_integer_arguments(tmp_path: Path):
+    source = """
+    fn sum8(int a, int b, int c, int d, int e, int f, int g, int h) -> int {
+        return a + b + c + d + e + f + g + h;
+    }
+
+    fn main() -> int {
+        return sum8(1, 2, 3, 4, 5, 6, 7, 8);
+    }
+    """
+
+    result, asm = run_full_pipeline(tmp_path, source)
+
+    assert "push rax" in asm
+    assert "add rsp, 16" in asm
+    assert "qword [rbp+16]" in asm
+    assert "qword [rbp+24]" in asm
+    assert result.returncode == 36
