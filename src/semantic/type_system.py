@@ -14,6 +14,8 @@ class TypeKind(Enum):
     STRUCT = auto()
     FUNCTION = auto()
     ERROR = auto()
+    ARRAY = auto()
+    POINTER = auto()
 
 
 @dataclass
@@ -23,6 +25,9 @@ class Type:
     return_type: Optional["Type"] = None
     param_types: List["Type"] = field(default_factory=list)
     fields: Dict[str, "Type"] = field(default_factory=dict)
+    element_type: Optional["Type"] = None
+    array_size: Optional[int] = None
+
 
     def is_numeric(self) -> bool:
         return self.kind in {TypeKind.INT, TypeKind.FLOAT}
@@ -38,6 +43,12 @@ class Type:
 
     def is_function(self) -> bool:
         return self.kind == TypeKind.FUNCTION
+
+    def is_array(self) -> bool:
+        return self.kind == TypeKind.ARRAY
+
+    def is_pointer(self) -> bool:
+        return self.kind == TypeKind.POINTER
 
     def equals(self, other: "Type") -> bool:
         if not isinstance(other, Type):
@@ -60,6 +71,11 @@ class Type:
                 return False
 
             return all(a.equals(b) for a, b in zip(self.param_types, other.param_types))
+
+        if self.kind == TypeKind.POINTER:
+            if self.element_type is None or other.element_type is None:
+                return False
+            return self.element_type.equals(other.element_type)
 
         return True
 
@@ -101,7 +117,16 @@ class Type:
             ret = str(self.return_type) if self.return_type else "void"
             return f"fn({params}) -> {ret}"
 
+        if self.kind == TypeKind.ARRAY:
+            return f"{self.element_type}[{self.array_size}]"
+
+        if self.kind == TypeKind.POINTER:
+            return f"{self.element_type}*"
+
+
         return "<unknown>"
+
+
 
 
 INT_TYPE = Type(TypeKind.INT)
@@ -131,6 +156,18 @@ def make_struct_type(name: str, fields: Optional[Dict[str, Type]] = None) -> Typ
         fields=fields or {}
     )
 
+def make_array_type(element_type: Type, array_size: int) -> Type:
+    return Type(
+        kind=TypeKind.ARRAY,
+        element_type=element_type,
+        array_size=array_size,
+    )
+
+def make_pointer_type(element_type: Type) -> Type:
+    return Type(
+        kind=TypeKind.POINTER,
+        element_type=element_type,
+    )
 
 def make_function_type(param_types: List[Type], return_type: Type) -> Type:
     return Type(
@@ -164,28 +201,30 @@ def get_type_size(t: Type) -> int:
     if t == STRING_TYPE:
         return 8
 
-    # Добавлено: обработка struct
+    if t.is_array():
+        return get_type_size(t.element_type) * int(t.array_size)
+
     if t.is_struct():
         total_size = 0
         max_alignment = 1
 
-        # Вычисляем размер с учетом выравнивания
         for field_name, field_type in t.fields.items():
             field_size = get_type_size(field_type)
             field_alignment = get_type_alignment(field_type)
 
-            # Выравнивание текущего поля
             if total_size % field_alignment != 0:
                 total_size += field_alignment - (total_size % field_alignment)
 
             total_size += field_size
             max_alignment = max(max_alignment, field_alignment)
 
-        # Выравнивание всей структуры
         if total_size % max_alignment != 0:
             total_size += max_alignment - (total_size % max_alignment)
 
         return total_size
+
+    if t.is_pointer():
+        return 8
 
     return 0
 
@@ -200,6 +239,8 @@ def get_type_alignment(t: Type) -> int:
     if t == STRING_TYPE:
         return 8
 
+    if t.is_array():
+        return get_type_alignment(t.element_type)
 
     if t.is_struct():
         max_alignment = 1
@@ -207,5 +248,8 @@ def get_type_alignment(t: Type) -> int:
             field_alignment = get_type_alignment(field_type)
             max_alignment = max(max_alignment, field_alignment)
         return max_alignment
+
+    if t.is_pointer():
+        return 8
 
     return 1

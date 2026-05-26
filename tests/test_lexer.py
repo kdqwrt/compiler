@@ -260,15 +260,15 @@ def test_assignment_operators():
     assert scanner.get_errors() == []
 
 
-def test_invalid_ampersand():
-
+def test_single_ampersand_token():
     source = "a & b"
     scanner = Scanner(source)
     tokens = scanner.scan_tokens()
 
     errors = scanner.get_errors()
-    assert len(errors) == 1
-    assert "Ожидался '&'" in errors[0]
+
+    assert len(errors) == 0
+    assert any(token.type.name == "BIT_AND" for token in tokens)
 
 
 def test_invalid_pipe():
@@ -442,7 +442,7 @@ def test_multiple_errors():
     tokens = scanner.scan_tokens()
 
     errors = scanner.get_errors()
-    assert len(errors) == 4  # 4 неизвестных символа
+    assert len(errors) == 3 # 4 неизвестных символа
     assert scanner.scan_tokens()  # Должен продолжить после ошибок
 
 

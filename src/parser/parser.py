@@ -202,16 +202,38 @@ class Parser:
             type_token.column
         )
 
+    def parsePointerStars(self):
+        pointer_depth = 0
+
+        while self.match(TokenType.STAR):
+            pointer_depth += 1
+
+        return pointer_depth
+
     def parseParameter(self):
         type_token = self.consumeType()
         if type_token is None:
             return None
 
+        pointer_depth = self.parsePointerStars()
+
         name = self.consume(TokenType.IDENTIFIER, "Expected parameter name")
         if name is None:
             return None
 
-        return ParamNode(type_token, name, type_token.line, type_token.column)
+        array_sizes = []
+
+        while self.match(TokenType.LBRACKET):
+            size_expr = self.parseExpression()
+            self.consume(TokenType.RBRACKET, "Expected ']' after array size")
+            array_sizes.append(size_expr)
+
+        node = ParamNode(type_token, name, type_token.line, type_token.column)
+        node.array_sizes = array_sizes
+
+        node.pointer_depth = pointer_depth
+
+        return node
 
 
     def parseStatement(self):
@@ -262,51 +284,115 @@ class Parser:
 
         return BlockStmtNode(statements, end.line, end.column)
 
+
+    def parseArrayInitializer(self):
+        brace = self.consume(TokenType.LBRACE, "Expected '{' for array initializer")
+        if brace is None:
+            brace = self.peek()
+
+        elements = []
+
+        if not self.check(TokenType.RBRACE):
+            element = self.parseExpression()
+            if element is not None:
+                elements.append(element)
+
+            while self.match(TokenType.COMMA):
+                if self.check(TokenType.RBRACE):
+                    break
+
+                element = self.parseExpression()
+                if element is not None:
+                    elements.append(element)
+
+        self.consume(TokenType.RBRACE, "Expected '}' after array initializer")
+
+        return ArrayInitializerExprNode(elements, brace.line, brace.column)
+
+
     def parseVarDecl(self):
         type_token = self.consumeType()
         if type_token is None:
             return None
 
+        pointer_depth = self.parsePointerStars()
+
         name = self.consume(TokenType.IDENTIFIER, "Expected variable name")
+        array_sizes = []
+
+        while self.match(TokenType.LBRACKET):
+            size_expr = self.parseExpression()
+            self.consume(TokenType.RBRACKET, "Expected ']' after array size")
+            array_sizes.append(size_expr)
         if name is None:
             return None
 
         initializer = None
         if self.match(TokenType.ASSIGN):
-            initializer = self.parseExpression()
+            if self.check(TokenType.LBRACE):
+                initializer = self.parseArrayInitializer()
+            else:
+                initializer = self.parseExpression()
 
         semi = self.consume(TokenType.SEMICOLON, "Expected ';' after variable declaration")
         if semi is None:
             semi = name
 
-        return VarDeclStmtNode(
+        node = VarDeclStmtNode(
             type_token,
             name,
             initializer,
             type_token.line,
             type_token.column
         )
+        node.array_sizes = array_sizes
+        node.pointer_depth = pointer_depth
+        return node
+
+        # return VarDeclStmtNode(
+        #     type_token,
+        #     name,
+        #     initializer,
+        #     type_token.line,
+        #     type_token.column
+        # )
 
     def parseVarDeclNoSemicolon(self):
         type_token = self.consumeType()
         if type_token is None:
             return None
 
+        pointer_depth = self.parsePointerStars()
+
         name = self.consume(TokenType.IDENTIFIER, "Expected variable name")
         if name is None:
             return None
 
+        array_sizes = []
+
+        while self.match(TokenType.LBRACKET):
+            size_expr = self.parseExpression()
+            self.consume(TokenType.RBRACKET, "Expected ']' after array size")
+            array_sizes.append(size_expr)
+
         initializer = None
         if self.match(TokenType.ASSIGN):
-            initializer = self.parseExpression()
+            if self.check(TokenType.LBRACE):
+                initializer = self.parseArrayInitializer()
+            else:
+                initializer = self.parseExpression()
 
-        return VarDeclStmtNode(
+        node = VarDeclStmtNode(
             type_token,
             name,
             initializer,
             type_token.line,
             type_token.column
         )
+
+        node.array_sizes = array_sizes
+        pointer_depth = self.parsePointerStars()
+        return node
 
     def parseExprStmt(self):
         expr = self.parseExpression()
@@ -494,10 +580,12 @@ class Parser:
 
     def parseUnary(self):
         if self.match(
-            TokenType.NOT,
-            TokenType.MINUS,
-            TokenType.INCREMENT,
-            TokenType.DECREMENT
+                TokenType.NOT,
+                TokenType.MINUS,
+                TokenType.STAR,
+                TokenType.BIT_AND,
+                TokenType.INCREMENT,
+                TokenType.DECREMENT
         ):
             operator = self.previous()
             operand = self.parseUnary()
@@ -529,6 +617,20 @@ class Parser:
                     paren = self.peek()
 
                 expr = CallExprNode(expr, arguments, paren.line, paren.column)
+
+            elif self.match(TokenType.LBRACKET):
+                index = self.parseExpression()
+                bracket = self.consume(TokenType.RBRACKET, "Expected ']' after array index")
+
+                if bracket is None:
+                    bracket = self.peek()
+
+                expr = ArrayAccessExprNode(
+                    expr,
+                    index,
+                    bracket.line,
+                    bracket.column,
+                )
 
             elif self.match(TokenType.DOT):
                 name = self.consume(TokenType.IDENTIFIER, "Expected field name after '.'")

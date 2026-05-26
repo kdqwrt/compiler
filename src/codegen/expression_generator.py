@@ -55,6 +55,26 @@ class ExpressionGeneratorMixin:
             )
             return dest
 
+        if isinstance(expr, ArrayAccessExprNode):
+            addr_op = self._array_element_address(expr)
+
+            temp_name = self.current_function.new_temp()
+            dest = IROperand(
+                IROperandKind.TEMP,
+                temp_name,
+                type_name=self._safe_type_name(expr),
+            )
+
+            self.current_block.add_instruction(
+                IRInstruction(
+                    opcode=IROpcode.LOAD,
+                    dest=dest,
+                    args=[addr_op],
+                    comment="load array element",
+                )
+            )
+            return dest
+
         if isinstance(expr, BinaryExprNode):
             operator = expr.operator.lexeme
 
@@ -100,8 +120,67 @@ class ExpressionGeneratorMixin:
             return dest
 
         if isinstance(expr, UnaryExprNode):
-            operand = self._gen_expr(expr.operand)
             operator = expr.operator.lexeme
+
+            if operator == "&":
+                if not isinstance(expr.operand, IdentifierExprNode):
+                    raise NotImplementedError(
+                        "IR generation for '&' is only implemented for identifiers"
+                    )
+
+                var_name = expr.operand.name.lexeme
+
+                dest = IROperand(
+                    IROperandKind.TEMP,
+                    self.current_function.new_temp(),
+                    type_name=self._safe_type_name(expr),
+                )
+
+                var_op = IROperand(
+                    IROperandKind.VARIABLE,
+                    var_name,
+                    type_name=self._safe_type_name(expr.operand),
+                )
+
+                self.current_block.add_instruction(
+                    IRInstruction(
+                        opcode=IROpcode.ADDR_OF,
+                        dest=dest,
+                        args=[var_op],
+                        comment=f"address of {var_name}",
+                    )
+                )
+
+                return dest
+
+            operand = self._gen_expr(expr.operand)
+
+            if operator == "*":
+                ptr_op = self._gen_expr(expr.operand)
+
+                temp_name = self.current_function.new_temp()
+                dest = IROperand(
+                    IROperandKind.TEMP,
+                    temp_name,
+                    type_name=self._safe_type_name(expr),
+                )
+
+                mem_op = IROperand(
+                    IROperandKind.MEMORY,
+                    ptr_op.value,
+                    type_name=self._safe_type_name(expr),
+                )
+
+                self.current_block.add_instruction(
+                    IRInstruction(
+                        opcode=IROpcode.LOAD,
+                        dest=dest,
+                        args=[mem_op],
+                        comment="pointer dereference",
+                    )
+                )
+
+                return dest
 
             if operator == "-":
                 temp_name = self.current_function.new_temp()
@@ -204,10 +283,31 @@ class ExpressionGeneratorMixin:
                     type_name=target_type,
                 )
 
+
+            elif isinstance(expr.target, ArrayAccessExprNode):
+                target_name = "array element"
+                target_type = self._safe_type_name(expr.target)
+                target_op = self._array_element_address(expr.target)
+
             elif isinstance(expr.target, StructAccessExprNode):
                 target_name = f"{expr.target.primary.name.lexeme}.{expr.target.field.lexeme}"
                 target_type = self._safe_type_name(expr.target)
                 target_op = self._struct_field_address(expr.target)
+
+            elif (
+                    isinstance(expr.target, UnaryExprNode)
+                    and expr.target.operator.lexeme == "*"
+            ):
+                target_name = "pointer dereference"
+                target_type = self._safe_type_name(expr.target)
+
+                ptr_op = self._gen_expr(expr.target.operand)
+
+                target_op = IROperand(
+                    IROperandKind.MEMORY,
+                    ptr_op.value,
+                    type_name=target_type,
+                )
 
             else:
                 raise NotImplementedError(
@@ -217,7 +317,60 @@ class ExpressionGeneratorMixin:
             operator = expr.operator.lexeme
 
             if operator == "=":
+                target_type = self._safe_type_name(expr.target)
+                value_type = self._safe_type_name(expr.value)
+
+                # array copy
+                if "[" in target_type and "[" in value_type:
+                    base_size = self._type_size(
+                        target_type.split("[", 1)[0]
+                    )
+
+                    total_count = 1
+                    tmp = target_type
+
+                    while "[" in tmp and "]" in tmp:
+                        dim = int(
+                            tmp.rsplit("[", 1)[1]
+                            .split("]", 1)[0]
+                        )
+                        total_count *= dim
+                        tmp = tmp.rsplit("[", 1)[0]
+
+                    total_bytes = base_size * total_count
+
+                    src = IROperand(
+                        IROperandKind.VARIABLE,
+                        expr.value.name.lexeme,
+                        type_name=value_type,
+                    )
+
+                    dst = IROperand(
+                        IROperandKind.VARIABLE,
+                        expr.target.name.lexeme,
+                        type_name=target_type,
+                    )
+
+                    self.current_block.add_instruction(
+                        IRInstruction(
+                            opcode=IROpcode.MEMCPY,
+                            args=[
+                                dst,
+                                src,
+                                IROperand(
+                                    IROperandKind.LITERAL,
+                                    total_bytes,
+                                    type_name="int",
+                                ),
+                            ],
+                            comment="array copy",
+                        )
+                    )
+
+                    return dst
+
                 value_op = self._gen_expr(expr.value)
+
                 self.current_block.add_instruction(
                     IRInstruction(
                         opcode=IROpcode.STORE,
@@ -286,8 +439,26 @@ class ExpressionGeneratorMixin:
                     "IR generation for non-identifier call targets is not implemented yet"
                 )
 
-            for i, arg in enumerate(expr.arguments):
-                arg_op = self._gen_expr(arg)
+            prepared_args = []
+
+            for arg in expr.arguments:
+                if isinstance(arg, IdentifierExprNode):
+                    arg_type = self._safe_type_name(arg)
+
+                    if "[" in arg_type and "]" in arg_type:
+                        arg_op = IROperand(
+                            IROperandKind.VARIABLE,
+                            arg.name.lexeme,
+                            type_name=arg_type,
+                        )
+                    else:
+                        arg_op = self._gen_expr(arg)
+                else:
+                    arg_op = self._gen_expr(arg)
+
+                prepared_args.append(arg_op)
+
+            for i, arg_op in enumerate(prepared_args):
                 self.current_block.add_instruction(
                     IRInstruction(
                         IROpcode.PARAM,
@@ -590,7 +761,227 @@ class ExpressionGeneratorMixin:
             type_name=field_type,
         )
 
+    def _array_element_address(self, expr: ArrayAccessExprNode) -> IROperand:
+        indices = []
+        current = expr
+
+        while isinstance(current, ArrayAccessExprNode):
+            indices.insert(0, current.index)
+            current = current.array
+
+        if not isinstance(current, IdentifierExprNode):
+            raise NotImplementedError(
+                "IR generation for non-identifier array base is not implemented yet"
+            )
+
+        base_name = current.name.lexeme
+        base_type = self._safe_type_name(current)
+        element_type = self._safe_type_name(expr)
+
+        index_ops = [self._gen_expr(index) for index in indices]
+
+        dimensions = []
+        type_part = base_type
+
+        while "[" in type_part and "]" in type_part:
+            size_text = type_part.rsplit("[", 1)[1].split("]", 1)[0]
+            dimensions.append(int(size_text))
+            type_part = type_part.rsplit("[", 1)[0]
+
+        if len(dimensions) < len(index_ops):
+            raise NotImplementedError(
+                "not enough array dimensions for indexed access"
+            )
+
+        linear_index = None
+
+        for position, index_op in enumerate(index_ops):
+            stride = 1
+
+            current_dim_size = dimensions[position]
+
+            bounds_ok = self.current_function.new_label("bounds_ok")
+            bounds_fail = self.current_function.new_label("bounds_fail")
+
+            ok_block = BasicBlock(bounds_ok)
+            fail_block = BasicBlock(bounds_fail)
+
+            self.current_function.add_block(ok_block)
+            self.current_function.add_block(fail_block)
+
+            less_than_zero = IROperand(
+                IROperandKind.TEMP,
+                self.current_function.new_temp(),
+                type_name="bool",
+            )
+
+            self.current_block.add_instruction(
+                IRInstruction(
+                    opcode=IROpcode.CMP_LT,
+                    dest=less_than_zero,
+                    args=[
+                        index_op,
+                        IROperand(IROperandKind.LITERAL, 0, type_name="int"),
+                    ],
+                    comment="bounds check index < 0",
+                )
+            )
+
+            self._emit_jump(
+                IROpcode.JUMP_IF,
+                less_than_zero,
+                IROperand(IROperandKind.LABEL, bounds_fail),
+                comment="out of bounds",
+            )
+
+            greater_equal_size = IROperand(
+                IROperandKind.TEMP,
+                self.current_function.new_temp(),
+                type_name="bool",
+            )
+
+            self.current_block.add_instruction(
+                IRInstruction(
+                    opcode=IROpcode.CMP_GE,
+                    dest=greater_equal_size,
+                    args=[
+                        index_op,
+                        IROperand(IROperandKind.LITERAL, current_dim_size, type_name="int"),
+                    ],
+                    comment="bounds check index >= size",
+                )
+            )
+
+            self._emit_jump(
+                IROpcode.JUMP_IF,
+                greater_equal_size,
+                IROperand(IROperandKind.LABEL, bounds_fail),
+                comment="out of bounds",
+            )
+
+            self._emit_jump(
+                IROpcode.JUMP,
+                IROperand(IROperandKind.LABEL, bounds_ok),
+                comment="bounds ok",
+            )
+
+            self._switch_block(fail_block)
+
+            self.current_block.add_instruction(
+                IRInstruction(
+                    opcode=IROpcode.RETURN,
+                    args=[IROperand(IROperandKind.LITERAL, 255, type_name="int")],
+                    comment="array bounds error",
+                )
+            )
+
+            self._switch_block(ok_block)
+
+            for dim in dimensions[position + 1:]:
+                stride *= dim
+
+            if stride != 1:
+                scaled_part_name = self.current_function.new_temp()
+                scaled_part = IROperand(
+                    IROperandKind.TEMP,
+                    scaled_part_name,
+                    type_name="int",
+                )
+
+                self.current_block.add_instruction(
+                    IRInstruction(
+                        opcode=IROpcode.MUL,
+                        dest=scaled_part,
+                        args=[
+                            index_op,
+                            IROperand(IROperandKind.LITERAL, stride, type_name="int"),
+                        ],
+                        comment="multidimensional array stride",
+                    )
+                )
+
+                part = scaled_part
+            else:
+                part = index_op
+
+            if linear_index is None:
+                linear_index = part
+            else:
+                sum_name = self.current_function.new_temp()
+                summed = IROperand(
+                    IROperandKind.TEMP,
+                    sum_name,
+                    type_name="int",
+                )
+
+                self.current_block.add_instruction(
+                    IRInstruction(
+                        opcode=IROpcode.ADD,
+                        dest=summed,
+                        args=[linear_index, part],
+                        comment="multidimensional array linear index",
+                    )
+                )
+
+                linear_index = summed
+
+        element_size = self._type_size(element_type)
+
+        scaled_index_name = self.current_function.new_temp()
+        scaled_index = IROperand(
+            IROperandKind.TEMP,
+            scaled_index_name,
+            type_name="int",
+        )
+
+        self.current_block.add_instruction(
+            IRInstruction(
+                opcode=IROpcode.MUL,
+                dest=scaled_index,
+                args=[
+                    linear_index,
+                    IROperand(
+                        IROperandKind.LITERAL,
+                        element_size,
+                        type_name="int",
+                    ),
+                ],
+                comment="array index scaling",
+            )
+        )
+
+        addr_temp_name = self.current_function.new_temp()
+        addr_temp = IROperand(
+            IROperandKind.TEMP,
+            addr_temp_name,
+            type_name=f"{element_type}*",
+        )
+
+        base_operand = IROperand(
+            IROperandKind.VARIABLE,
+            base_name,
+            type_name=base_type,
+        )
+
+        self.current_block.add_instruction(
+            IRInstruction(
+                opcode=IROpcode.GEP,
+                dest=addr_temp,
+                args=[base_operand, scaled_index],
+                comment=f"address of {base_name}[index]",
+            )
+        )
+
+        return IROperand(
+            IROperandKind.MEMORY,
+            addr_temp.value,
+            type_name=element_type,
+        )
+
     def _type_size(self, type_name: str) -> int:
+        if type_name and "*" in type_name:
+            return 8
+
         if type_name == "int":
             return 4
         if type_name == "float":

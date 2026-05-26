@@ -38,12 +38,30 @@ class IRGenerator(ControlFlowGeneratorMixin, ExpressionGeneratorMixin):
     def _generate_global_variable(self, node: VarDeclStmtNode) -> None:
         initializer = None
 
-        if node.initializer is not None and isinstance(node.initializer, LiteralExprNode):
+        if isinstance(node.initializer, LiteralExprNode):
             initializer = node.initializer.value
+
+        elif isinstance(node.initializer, ArrayInitializerExprNode):
+            initializer = [
+                element.value
+                for element in node.initializer.elements
+                if isinstance(element, LiteralExprNode)
+            ]
+
+        base_type_name = node.type.lexeme
+        type_name = base_type_name
+
+        array_sizes = getattr(node, "array_sizes", [])
+
+        if array_sizes:
+            for size_expr in array_sizes:
+                if isinstance(size_expr, LiteralExprNode):
+                    dim = int(size_expr.value)
+                    type_name += f"[{dim}]"
 
         global_var = IRGlobalVariable(
             name=node.name.lexeme,
-            type_name=node.type.lexeme,
+            type_name=type_name,
             initializer=initializer,
         )
 
@@ -125,12 +143,31 @@ class IRGenerator(ControlFlowGeneratorMixin, ExpressionGeneratorMixin):
             f"IR generation for statement {type(stmt).__name__} is not implemented yet"
         )
 
-
-
     def _gen_var_decl(self, stmt: VarDeclStmtNode) -> None:
         var_name = stmt.name.lexeme
-        type_name = stmt.type.lexeme
-        size = self._type_size(type_name)
+        base_type_name = stmt.type.lexeme
+        type_name = base_type_name
+
+        pointer_depth = getattr(stmt, "pointer_depth", 0)
+
+        for _ in range(pointer_depth):
+            type_name += "*"
+
+        array_sizes = getattr(stmt, "array_sizes", [])
+
+        if array_sizes:
+            total_count = 1
+
+            for size_expr in array_sizes:
+                if isinstance(size_expr, LiteralExprNode):
+                    dim = int(size_expr.value)
+                    total_count *= dim
+                    type_name += f"[{dim}]"
+
+            element_size = self._type_size(base_type_name)
+            size = total_count * element_size
+        else:
+            size = self._type_size(type_name)
 
         var_op = IROperand(IROperandKind.VARIABLE, var_name, type_name=type_name)
 

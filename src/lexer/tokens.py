@@ -42,6 +42,7 @@ class TokenType(Enum):
     GEQ = auto()
 
     AND = auto()
+    BIT_AND = auto()
     OR = auto()
     NOT = auto()
 

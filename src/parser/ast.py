@@ -205,7 +205,19 @@ class StructAccessExprNode(ExpressionNode):
         self.primary = primary
         self.field = field
 
+class ArrayAccessExprNode(ExpressionNode):
 
+    def __init__(self, array, index, line, column):
+        super().__init__(line, column)
+        self.array = array
+        self.index = index
+
+
+class ArrayInitializerExprNode(ExpressionNode):
+
+    def __init__(self, elements, line, column):
+        super().__init__(line, column)
+        self.elements = elements
 
 def expr_to_str(expr):
     if expr is None:
@@ -220,6 +232,13 @@ def expr_to_str(expr):
 
     if isinstance(expr, IdentifierExprNode):
         return expr.name.lexeme if hasattr(expr.name, 'lexeme') else str(expr.name)
+
+    if isinstance(expr, ArrayAccessExprNode):
+        return f"{expr_to_str(expr.array)}[{expr_to_str(expr.index)}]"
+
+    if isinstance(expr, ArrayInitializerExprNode):
+        elements = ", ".join(expr_to_str(element) for element in expr.elements)
+        return "{" + elements + "}"
 
     if isinstance(expr, BinaryExprNode):
         return f"({expr_to_str(expr.left)} {expr.operator.lexeme} {expr_to_str(expr.right)})"
@@ -243,7 +262,11 @@ def expr_to_str(expr):
     if isinstance(expr, ExprStmtNode):
         return expr_to_str(expr.expression)
 
+
     return str(expr)
+
+
+
 
 
 def pretty_print(node, indent=0):
@@ -269,7 +292,12 @@ def pretty_print(node, indent=0):
         return result
 
     if isinstance(node, ParamNode):
-        return f"{pad}{node.type.lexeme} {node.name.lexeme}"
+        suffix = ""
+
+        for size in getattr(node, "array_sizes", []):
+            suffix += f"[{expr_to_str(size)}]"
+
+        return f"{pad}{node.type.lexeme} {node.name.lexeme}{suffix}"
 
     if isinstance(node, StructDeclNode):
         result = f"{pad}StructDecl: {node.name.lexeme}\n"
@@ -287,10 +315,16 @@ def pretty_print(node, indent=0):
         return result.rstrip()
 
     if isinstance(node, VarDeclStmtNode):
+        suffix = ""
+
+        for size in getattr(node, "array_sizes", []):
+            suffix += f"[{expr_to_str(size)}]"
+
         init = ""
         if node.initializer:
             init = f" = {expr_to_str(node.initializer)}"
-        return f"{pad}VarDecl: {node.type.lexeme} {node.name.lexeme}{init}"
+
+        return f"{pad}VarDecl: {node.type.lexeme} {node.name.lexeme}{suffix}{init}"
 
     if isinstance(node, ReturnStmtNode):
         if node.value:
@@ -391,6 +425,8 @@ def generate_dot(ast):
             label += f"\\n{node.operator.lexeme}"
         elif isinstance(node, StructAccessExprNode):
             label += f"\\n.{node.field.lexeme}"
+        elif isinstance(node, ArrayInitializerExprNode):
+            label += "\\ninitializer"
 
         return escape(label)
 
@@ -426,3 +462,5 @@ def generate_dot(ast):
     visit(ast)
     lines.append("}")
     return "\n".join(lines)
+
+

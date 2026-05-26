@@ -80,7 +80,12 @@ class ASTPrettyPrinter(ASTVisitor):
         self.indent -= 2
 
     def visit_ParamNode(self, node):
-        self.print(f"{node.type.lexeme} {node.name.lexeme}")
+        suffix = ""
+
+        for size in getattr(node, "array_sizes", []):
+            suffix += f"[{self._expr_to_str(size)}]"
+
+        self.print(f"{node.type.lexeme} {node.name.lexeme}{suffix}")
 
 
     def visit_BlockStmtNode(self, node):
@@ -91,8 +96,24 @@ class ASTPrettyPrinter(ASTVisitor):
         self.indent -= 1
 
     def visit_VarDeclStmtNode(self, node):
-        init = f" = {self._expr_to_str(node.initializer)}" if node.initializer is not None else ""
-        self.print(f"VarDecl: {node.type.lexeme} {node.name.lexeme}{init}")
+        suffix = ""
+
+        for size in getattr(node, "array_sizes", []):
+            suffix += f"[{self._expr_to_str(size)}]"
+
+        init = (
+            f" = {self._expr_to_str(node.initializer)}"
+            if node.initializer is not None
+            else ""
+        )
+
+        self.print(
+            f"VarDecl: {node.type.lexeme} "
+            f"{node.name.lexeme}{suffix}{init}"
+        )
+
+
+
 
     def visit_ReturnStmtNode(self, node):
         if node.value is not None:
@@ -196,6 +217,13 @@ class ASTPrettyPrinter(ASTVisitor):
 
         elif isinstance(expr, IdentifierExprNode):
             return expr.name.lexeme if hasattr(expr.name, "lexeme") else str(expr.name)
+
+        elif isinstance(expr, ArrayAccessExprNode):
+            return f"{self._expr_to_str(expr.array)}[{self._expr_to_str(expr.index)}]"
+
+        elif isinstance(expr, ArrayInitializerExprNode):
+            elements = ", ".join(self._expr_to_str(element) for element in expr.elements)
+            return "{" + elements + "}"
 
         elif isinstance(expr, BinaryExprNode):
             return f"({self._expr_to_str(expr.left)} {expr.operator.lexeme} {self._expr_to_str(expr.right)})"

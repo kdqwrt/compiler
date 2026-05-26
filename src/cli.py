@@ -11,6 +11,11 @@ from src.semantic.analyzer import SemanticAnalyzer
 from src.ir.ir_generator import IRGenerator
 from src.ir.validator import IRValidator
 from src.codegen.x86_generator import X86Generator
+from src.optimization.constant_folding import ConstantFoldingPass
+from src.optimization.constant_propagation import ConstantPropagationPass
+from src.optimization.dead_code_elimination import DeadCodeEliminationPass
+from src.optimization.dead_store_elimination import DeadStoreEliminationPass
+
 
 VERSION = "0.3.0"
 SPEC_PATH = Path("docs/language_spec.md")
@@ -311,6 +316,11 @@ def run_ir(args):
 
     ir_gen = IRGenerator(analyzer.get_symbol_table())
     program = ir_gen.generate(ast)
+    if getattr(args, "optimize", False):
+        program = ConstantPropagationPass().run(program)
+        program = ConstantFoldingPass().run(program)
+        program = DeadCodeEliminationPass().run(program)
+        program = DeadStoreEliminationPass().run(program)
 
 
     if getattr(args, "validate", False):
@@ -455,7 +465,14 @@ def run_compile(args):
             print(file=sys.stderr)
         sys.exit(1)
 
-    ir_program = IRGenerator(analyzer.get_symbol_table()).generate(ast)
+    ir_program = IRGenerator(
+        analyzer.get_symbol_table()
+    ).generate(ast)
+
+    ir_program = ConstantPropagationPass().run(ir_program)
+    ir_program = ConstantFoldingPass().run(ir_program)
+    ir_program = DeadCodeEliminationPass().run(ir_program)
+    ir_program = DeadStoreEliminationPass().run(ir_program)
     asm = X86Generator(
         use_register_allocation=getattr(args, "use_register_allocation", False)
     ).generate(ir_program)
@@ -554,6 +571,7 @@ def main():
         help="IR output format"
     )
     ir.add_argument("--stats", action="store_true", help="Show IR statistics")
+    ir.add_argument("--optimize", action="store_true", help="Apply IR optimization passes")
     ir.set_defaults(func=run_ir)
     ir.add_argument("--validate", action="store_true", help="Validate generated IR")
 

@@ -168,7 +168,7 @@ class Scanner:
                 if self.match('&'):
                     self.add_token(TokenType.AND)
                 else:
-                    self.error(f"Ожидался '&', получено '{self.peek()}'")
+                    self.add_token(TokenType.BIT_AND)
 
             case '|':
                 if self.match('|'):

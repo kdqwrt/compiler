@@ -34,6 +34,8 @@ class IROpcode(Enum):
     ALLOCA = auto()
     MOVE = auto()
     GEP = auto()
+    MEMCPY = auto()
+    ADDR_OF = auto()
 
     # Control flow
     LABEL = auto()
