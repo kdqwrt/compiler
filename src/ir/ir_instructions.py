@@ -92,6 +92,9 @@ class IRInstruction:
     dest: Optional[IROperand] = None
     args: List[IROperand] = field(default_factory=list)
     comment: Optional[str] = None
+    line: Optional[int] = None
+    column: Optional[int] = None
+    filename: Optional[str] = None
 
     def is_terminator(self) -> bool:
         return self.opcode in {
@@ -133,6 +136,9 @@ class IRInstruction:
             "dest": self.dest.to_json() if self.dest else None,
             "args": [arg.to_json() for arg in self.args],
             "comment": self.comment,
+            "line": self.line,
+            "column": self.column,
+            "filename": self.filename,
         }
 
 

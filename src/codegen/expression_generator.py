@@ -800,6 +800,78 @@ class ExpressionGeneratorMixin:
 
             current_dim_size = dimensions[position]
 
+            # compile-time bounds check
+            if (
+                    isinstance(indices[position], LiteralExprNode)
+            ):
+                const_index = int(indices[position].value)
+
+                if 0 <= const_index < current_dim_size:
+                    # индекс гарантированно корректный,
+                    # runtime-проверки не нужны
+                    pass
+                else:
+                    raise ValueError(
+                        f"Array index {const_index} out of bounds "
+                        f"for dimension size {current_dim_size}"
+                    )
+
+                # сразу используем литерал
+                part = index_op
+
+                stride = 1
+                for dim in dimensions[position + 1:]:
+                    stride *= dim
+
+                if stride != 1:
+                    scaled_part_name = self.current_function.new_temp()
+                    scaled_part = IROperand(
+                        IROperandKind.TEMP,
+                        scaled_part_name,
+                        type_name="int",
+                    )
+
+                    self.current_block.add_instruction(
+                        IRInstruction(
+                            opcode=IROpcode.MUL,
+                            dest=scaled_part,
+                            args=[
+                                part,
+                                IROperand(
+                                    IROperandKind.LITERAL,
+                                    stride,
+                                    type_name="int",
+                                ),
+                            ],
+                            comment="multidimensional array stride",
+                        )
+                    )
+
+                    part = scaled_part
+
+                if linear_index is None:
+                    linear_index = part
+                else:
+                    sum_name = self.current_function.new_temp()
+                    summed = IROperand(
+                        IROperandKind.TEMP,
+                        sum_name,
+                        type_name="int",
+                    )
+
+                    self.current_block.add_instruction(
+                        IRInstruction(
+                            opcode=IROpcode.ADD,
+                            dest=summed,
+                            args=[linear_index, part],
+                            comment="multidimensional array linear index",
+                        )
+                    )
+
+                    linear_index = summed
+
+                continue
+
             bounds_ok = self.current_function.new_label("bounds_ok")
             bounds_fail = self.current_function.new_label("bounds_fail")
 

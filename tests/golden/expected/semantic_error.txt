@@ -1,0 +1,5 @@
+Check failed: semantic errors found.
+error[SEMANTIC]: variable 'x' may be used before initialization
+ --> tests/golden/inputs/semantic_error.src:3:12
+  = context: in function 'main'
+  = help: Initialize the variable before reading it.

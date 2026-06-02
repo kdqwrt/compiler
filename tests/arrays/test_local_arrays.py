@@ -31,8 +31,8 @@ def generate_asm(source: str) -> str:
 
 
 def run_program(tmp_path: Path, source: str):
-    if shutil.which("nasm") is None or shutil.which("ld") is None:
-        pytest.skip("NASM/LD are required for execution test")
+    if shutil.which("nasm") is None or shutil.which("gcc") is None:
+        pytest.skip("NASM/GCC are required for execution test")
 
     asm = generate_asm(source)
 
@@ -45,7 +45,18 @@ def run_program(tmp_path: Path, source: str):
 
     subprocess.run(["nasm", "-f", "elf64", str(asm_file), "-o", str(obj_file)], check=True)
     subprocess.run(["nasm", "-f", "elf64", "src/runtime/runtime.asm", "-o", str(runtime_obj)], check=True)
-    subprocess.run(["ld", "-o", str(exe_file), str(runtime_obj), str(obj_file)], check=True)
+    subprocess.run(
+        [
+            "gcc",
+            "-no-pie",
+            "-nostartfiles",
+            str(runtime_obj),
+            str(obj_file),
+            "-o",
+            str(exe_file),
+        ],
+        check=True,
+    )
 
     return subprocess.run([str(exe_file)])
 
@@ -61,7 +72,8 @@ def test_local_array_generates_gep_load_store():
 
     asm = generate_asm(source)
 
-    assert "lea r11" in asm
+    assert "call malloc" in asm
+    assert "mov r11, qword [rbp-" in asm
     assert "add r11, r10" in asm
     assert "mov dword [r11], 5" in asm
     assert "mov eax, dword [r11]" in asm

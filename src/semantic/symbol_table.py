@@ -43,6 +43,7 @@ class SymbolInfo:
     scope_depth: int = 0
     declaration_order: int = -1
     is_placeholder: bool = False
+    used: bool = False
 
     def short_description(self) -> str:
         parts = [self.kind.name.lower(), self.name]

@@ -35,6 +35,7 @@ class SemanticAnalyzer(ASTVisitor):
         self.current_statement_index = -1
 
         self.decorated_ast = None
+        self.warnings = []
 
     def analyze(self, ast: ProgramNode) -> ProgramNode:
         self.decorated_ast = ast
@@ -46,10 +47,15 @@ class SemanticAnalyzer(ASTVisitor):
             if isinstance(decl, FunctionDeclNode):
                 self.visit(decl)
 
+        self._collect_unused_variable_warnings()
+
         return ast
 
     def get_errors(self):
         return self.error_reporter.get_errors()
+
+    def get_warnings(self):
+        return self.warnings
 
     def get_symbol_table(self) -> SymbolTable:
         return self.symbol_table
@@ -672,9 +678,9 @@ class SemanticAnalyzer(ASTVisitor):
 
         node.symbol = symbol
         node.inferred_type = symbol.type
+        symbol.used = True
 
-        # Проверка use-before-declaration нужна только для локальных переменных,
-        # но не для параметров функции
+
         if (
                 symbol.kind == SymbolKind.VARIABLE
                 and symbol.scope_name == self.symbol_table.current_scope.name
@@ -1554,6 +1560,38 @@ class SemanticAnalyzer(ASTVisitor):
             token.column,
             context=self._current_context(),
         )
+
+    def _collect_unused_variable_warnings(self):
+        self._collect_scope_unused(self.symbol_table.global_scope)
+
+    def _collect_scope_unused(self, scope):
+        for symbol in scope.symbols.values():
+
+            if symbol.kind not in {
+                SymbolKind.VARIABLE,
+                SymbolKind.PARAMETER,
+            }:
+                continue
+
+            if symbol.name.startswith("__"):
+                continue
+
+            if symbol.kind == SymbolKind.PARAMETER:
+                continue
+
+            if not symbol.used:
+                self.warnings.append(
+                    {
+                        "category": "UNUSED_VARIABLE",
+                        "message": f"unused variable '{symbol.name}'",
+                        "line": symbol.line,
+                        "column": symbol.column,
+                        "context": f"in scope '{scope.name}'",
+                    }
+                )
+
+        for child in scope.children:
+            self._collect_scope_unused(child)
 
     def _current_context(self) -> str:
         if self.current_function is not None:

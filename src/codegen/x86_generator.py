@@ -28,9 +28,13 @@ class X86Generator:
         self.string_counter = 0
         self.temp_compare_sources: dict[str, object] = {}
         self.variable_registers: dict[str, str] = {}
+        self.debug_file_index = 1
+        self.last_debug_location: tuple[int, int] | None = None
 
     def generate(self, program: IRProgram) -> str:
         self.lines = []
+        self.last_debug_location = None
+        # self.lines.append('.file 1 "input.src"')
         self.float_constants = {}
         self.float_counter = 0
         self.string_constants = {}
@@ -563,8 +567,26 @@ class X86Generator:
                 and str(cond.value) == str(instr.dest.value)
         )
 
+    def _emit_debug_location(self, instr) -> None:
+        line = getattr(instr, "line", None)
+        column = getattr(instr, "column", None)
+
+        if line is None:
+            return
+
+        column = column or 1
+        location = (line, column)
+
+        if self.last_debug_location == location:
+            return
+
+        self.lines.append(f"%line {line} input.src")
+        self.last_debug_location = location
+
 
     def _gen_instruction(self, instr) -> None:
+        self._emit_debug_location(instr)
+
         if instr.opcode == IROpcode.PHI:
             self.skip_next_phi_store = True
             self.lines.append(f"    ; phi skipped: {instr.to_text()}")
@@ -755,35 +777,17 @@ class X86Generator:
         offset = instr.args[1]
         dest = instr.dest
 
-        # base address
         if base.kind != IROperandKind.VARIABLE:
             self.lines.append(f"    ; unsupported GEP base: {instr.to_text()}")
             return
 
-        # offset -> r10
-        if offset.kind == IROperandKind.LITERAL:
-            self.lines.append(f"    mov r10, {offset.value}")
-        elif offset.kind == IROperandKind.TEMP:
-            reg = self._reg_for_type("r10", offset.type_name)
-            self.lines.append(
-                f"    mov {reg}, {self._temp_location(offset.value, offset.type_name)}"
-            )
-            if reg == "r10d":
-                self.lines.append("    movsxd r10, r10d")
-
-        else:
-            self.lines.append(f"    ; unsupported GEP offset: {instr.to_text()}")
-            return
-
-        # lea base
         if base.value in self.global_variable_names:
             self.lines.append(f"    lea r11, [rel {base.value}]")
         else:
             addr = self._var_addr(base.value)
 
             if (
-                    base.value in self.current_function.params
-                    and base.type_name
+                    base.type_name
                     and "[" in base.type_name
                     and "]" in base.type_name
             ):
@@ -791,7 +795,26 @@ class X86Generator:
             else:
                 self.lines.append(f"    lea r11, {addr}")
 
-        self.lines.append("    add r11, r10")
+        if offset.kind == IROperandKind.LITERAL:
+            offset_value = int(offset.value)
+
+            if offset_value != 0:
+                self.lines.append(f"    add r11, {offset_value}")
+
+        elif offset.kind == IROperandKind.TEMP:
+            reg = self._reg_for_type("r10", offset.type_name)
+            self.lines.append(
+                f"    mov {reg}, {self._temp_location(offset.value, offset.type_name)}"
+            )
+
+            if reg == "r10d":
+                self.lines.append("    movsxd r10, r10d")
+
+            self.lines.append("    add r11, r10")
+
+        else:
+            self.lines.append(f"    ; unsupported GEP offset: {instr.to_text()}")
+            return
 
         self.lines.append(
             f"    mov {self._temp_location(dest.value, dest.type_name)}, r11"
@@ -1396,8 +1419,11 @@ class X86Generator:
 
         if operand.kind == IROperandKind.VARIABLE:
             if operand.type_name and "[" in operand.type_name and "]" in operand.type_name:
-                addr = self._var_addr(operand.value)
-                self.lines.append(f"    lea {reg}, {addr}")
+                if operand.value in self.global_variable_names:
+                    self.lines.append(f"    lea {reg}, [rel {operand.value}]")
+                else:
+                    addr = self._var_addr(operand.value)
+                    self.lines.append(f"    mov {reg}, qword {addr}")
                 return
 
             typed_reg = self._reg_for_type(reg, operand.type_name)
@@ -1429,6 +1455,11 @@ class X86Generator:
             if instr.dest is not None and instr.dest.kind == IROperandKind.TEMP:
                 self.lines.append(
                     f"    movsd {self._temp_location(instr.dest.value, instr.dest.type_name)}, xmm0"
+                )
+
+            if instr.dest is not None and instr.dest.kind == IROperandKind.VARIABLE:
+                self.lines.append(
+                    f"    mov {self._var_location(instr.dest.value, instr.dest.type_name)}, rax"
                 )
 
             self.pending_params.clear()
@@ -1466,6 +1497,11 @@ class X86Generator:
             self.lines.append(
                 f"    mov {self._temp_location(instr.dest.value, instr.dest.type_name)}, "
                 f"{self._acc_reg(instr.dest.type_name)}"
+            )
+
+        if instr.dest is not None and instr.dest.kind == IROperandKind.VARIABLE:
+            self.lines.append(
+                f"    mov {self._var_location(instr.dest.value, instr.dest.type_name)}, rax"
             )
 
         self.pending_params.clear()

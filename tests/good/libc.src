@@ -1,0 +1,4 @@
+fn main() -> int {
+    printf("len=%d\n", strlen("abc"));
+    return strlen("abc");
+}

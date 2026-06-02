@@ -6,8 +6,8 @@ function main: int ()
     x = ALLOCA 4    # allocate x
     STORE x, 0    # initialize x
     t1 = CMP_LT 1, 2    # < expression
-    JUMP_IF_NOT t1, else3    # if false
-    JUMP then1    # if true
+    JUMP_IF_NOT t1, else3    # condition false
+    JUMP then1    # condition true
   then1:
     STORE x, 10    # x = ...
     JUMP endif2    # end if

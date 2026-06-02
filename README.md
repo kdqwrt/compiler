@@ -13,7 +13,41 @@ MiniCompiler — учебный компилятор для упрощённог
 - система типов
 - набор модульных и golden-тестов
 
----
+## Compilation Pipeline
+
+Компиляция программы выполняется по следующему конвейеру:
+
+```text
+Source
+  ↓
+Preprocessor
+  ↓
+Lexer
+  ↓
+Parser
+  ↓
+AST
+  ↓
+Semantic Analysis
+  ↓
+IR Generation
+  ↓
+IR Optimization
+  ↓
+Register Allocation
+  ↓
+Assembly Generation
+  ↓
+Peephole Optimization
+  ↓
+NASM
+  ↓
+ELF Object
+  ↓
+Linker
+  ↓
+Executable
+```
 
 ## Содержание
 
@@ -96,6 +130,50 @@ MiniCompiler — учебный компилятор для упрощённог
 - экспорт в JSON
 - экспорт в Graphviz DOT
 - обход дерева с помощью visitor pattern
+
+
+## Intermediate Representation (IR)
+
+Компилятор использует собственное промежуточное представление (IR).
+
+Основные инструкции:
+
+```text
+MOVE
+ADD
+SUB
+MUL
+DIV
+
+LOAD
+STORE
+
+GEP
+
+PARAM
+CALL
+RETURN
+
+CMP_EQ
+CMP_NE
+CMP_LT
+CMP_LE
+CMP_GT
+CMP_GE
+
+JUMP
+JUMP_IF
+```
+
+Пример:
+
+```text
+t1 = MUL 3, 4
+t2 = ADD 2, t1
+RETURN t2
+```
+
+
 
 ## Control Flow Generation
 
@@ -398,6 +476,66 @@ jmp .L1
 .L1:
 ```
 
+
+## Runtime and External Functions
+
+Поддерживаются вызовы внешних функций:
+
+```text
+printf
+scanf
+malloc
+free
+strlen
+pow
+```
+
+Вызовы выполняются согласно System V AMD64 ABI.
+
+Аргументы передаются через:
+
+```text
+rdi
+rsi
+rdx
+rcx
+r8
+r9
+```
+
+Результат возвращается через:
+
+```text
+rax
+```
+
+## Arrays
+
+Поддерживаются одномерные массивы.
+
+Особенности реализации:
+
+- массивы выделяются через malloc
+- размер вычисляется как sizeof(type) * count
+- на стеке хранится указатель на массив
+- доступ выполняется через GEP
+- поддерживается bounds checking
+- для константных индексов bounds check может быть удалён на этапе компиляции
+
+## Optimization Pipeline
+
+Оптимизации выполняются в следующем порядке:
+
+1. Constant Folding
+2. Constant Propagation
+3. Dead Code Elimination
+4. Dead Store Elimination
+5. Control Flow Simplification
+6. Register Allocation
+7. Peephole Optimization
+```
+
+
 ---
 
 
@@ -564,7 +702,30 @@ echo $?
 ```
 
 ---
+## Testing Strategy
 
+Используются:
+
+- Unit Tests
+- Golden Tests
+- Integration Tests
+- Regression Tests
+- Differential Tests
+- Property-Based Tests
+- Fuzz Tests
+
+Проверяются все этапы компиляции:
+
+```text
+Lexer
+Parser
+Semantic
+IR
+Optimizer
+Codegen
+CLI
+Executable
+```
 
 ### Запуск тестов
 ```bash

@@ -1,0 +1,4 @@
+fn main() -> int {
+    int x = "hello";
+    return 0;
+}

@@ -106,6 +106,28 @@ class IRGenerator(ControlFlowGeneratorMixin, ExpressionGeneratorMixin):
             IRInstruction(opcode=opcode, args=list(args), comment=comment)
         )
 
+
+    def _emit_instruction(
+        self,
+        opcode: IROpcode,
+        dest: IROperand | None = None,
+        args: list[IROperand] | None = None,
+        comment: str | None = None,
+        node=None,
+    ) -> IRInstruction:
+        instr = IRInstruction(
+            opcode=opcode,
+            dest=dest,
+            args=args or [],
+            comment=comment,
+            line=getattr(node, "line", None),
+            column=getattr(node, "column", None),
+            filename=getattr(node, "filename", None),
+        )
+
+        self.current_block.add_instruction(instr)
+        return instr
+
     def _gen_stmt(self, stmt) -> None:
         if isinstance(stmt, VarDeclStmtNode):
             self._gen_var_decl(stmt)
@@ -117,13 +139,18 @@ class IRGenerator(ControlFlowGeneratorMixin, ExpressionGeneratorMixin):
 
         if isinstance(stmt, ReturnStmtNode):
             if stmt.value is None:
-                self.current_block.add_instruction(
-                    IRInstruction(IROpcode.RETURN, comment="return")
+                self._emit_instruction(
+                    IROpcode.RETURN,
+                    comment="return",
+                    node=stmt,
                 )
             else:
                 value_op = self._gen_expr(stmt.value)
-                self.current_block.add_instruction(
-                    IRInstruction(IROpcode.RETURN, args=[value_op], comment="return")
+                self._emit_instruction(
+                    IROpcode.RETURN,
+                    args=[value_op],
+                    comment="return",
+                    node=stmt,
                 )
             return
 
@@ -154,8 +181,9 @@ class IRGenerator(ControlFlowGeneratorMixin, ExpressionGeneratorMixin):
             type_name += "*"
 
         array_sizes = getattr(stmt, "array_sizes", [])
+        is_array = bool(array_sizes)
 
-        if array_sizes:
+        if is_array:
             total_count = 1
 
             for size_expr in array_sizes:
@@ -169,28 +197,62 @@ class IRGenerator(ControlFlowGeneratorMixin, ExpressionGeneratorMixin):
         else:
             size = self._type_size(type_name)
 
-        var_op = IROperand(IROperandKind.VARIABLE, var_name, type_name=type_name)
+        var_op = IROperand(
+            IROperandKind.VARIABLE,
+            var_name,
+            type_name=type_name,
+        )
 
         if var_name not in self.current_function.local_variables:
             self.current_function.local_variables.append(var_name)
+
         self.current_function.variable_map[var_name] = var_name
 
-        self.current_block.add_instruction(
-            IRInstruction(
+        if is_array:
+            self._emit_instruction(
+                opcode=IROpcode.PARAM,
+                args=[
+                    IROperand(IROperandKind.LITERAL, 0, type_name="int"),
+                    IROperand(IROperandKind.LITERAL, size, type_name="int"),
+                ],
+                comment=f"malloc size for {var_name}",
+                node=stmt,
+            )
+
+            self._emit_instruction(
+                opcode=IROpcode.CALL,
+                dest=var_op,
+                args=[
+                    IROperand(
+                        IROperandKind.VARIABLE,
+                        "malloc",
+                        type_name="fn(int) -> ptr",
+                    )
+                ],
+                comment=f"malloc array {var_name}",
+                node=stmt,
+            )
+        else:
+            self._emit_instruction(
                 opcode=IROpcode.ALLOCA,
                 dest=var_op,
-                args=[IROperand(IROperandKind.LITERAL, size, type_name="int")],
+                args=[
+                    IROperand(
+                        IROperandKind.LITERAL,
+                        size,
+                        type_name="int",
+                    )
+                ],
                 comment=f"allocate {var_name}",
+                node=stmt,
             )
-        )
 
         if stmt.initializer is not None:
             init_op = self._gen_expr(stmt.initializer)
-            self.current_block.add_instruction(
-                IRInstruction(
-                    opcode=IROpcode.STORE,
-                    args=[var_op, init_op],
-                    comment=f"initialize {var_name}",
-                )
+            self._emit_instruction(
+                opcode=IROpcode.STORE,
+                args=[var_op, init_op],
+                comment=f"initialize {var_name}",
+                node=stmt,
             )
 

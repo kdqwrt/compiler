@@ -1,0 +1,13 @@
+function main: int ()
+  # Variable map:
+  #   x -> x
+  #   y -> y
+  # Locals: x, y
+  entry:
+    x = ALLOCA 4    # allocate x
+    y = ALLOCA 4    # allocate y
+    t1 = MOVE 5    # load x
+    t2 = MOVE 7    # + expression
+    STORE y, 7    # initialize y
+    t3 = LOAD y    # load y
+    RETURN t3    # return
